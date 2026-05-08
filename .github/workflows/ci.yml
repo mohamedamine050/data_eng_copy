@@ -43,13 +43,13 @@ jobs:
         with:
           repository: mohamedamine050/data_eng
           token: ${{ secrets.GH_TOKEN }}
-
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v3
+        with:
+          args: -Dsonar.projectKey=mohamedamine050_data_eng -Dsonar.organization=mohamedamine050
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-
       - name: Quality Gate check
         uses: SonarSource/sonarqube-quality-gate-action@v1
         timeout-minutes: 5
