@@ -1,0 +1,78 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '.github/workflows/**'
+      - 'README.md'
+      - 'docs/**'
+      - '.env.example'
+  workflow_dispatch:
+
+jobs:
+  sonar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Data Engineering Repo
+        uses: actions/checkout@v4
+        with:
+          repository: https://github.com/mohamedamine050/data_eng
+          token: ${ secrets.GH_TOKEN }
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v3
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+      - name: Quality Gate check
+        uses: SonarSource/sonarqube-quality-gate-action@v1
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  infra-provisioning:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Terraform Repo
+        uses: actions/checkout@v4
+        with:
+          repository: https://github.com/mohamedamine050/repo_terraforme
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve tfplan
+
+      - name: Terraform Output
+        run: terraform output -json > tf_output.json
+
+      - name: Push Terraform Outputs
+        run: |
+          git config --global user.email 'ci-agent@example.com'
+          git config --global user.name 'CI Agent'
+          git add tf_output.json
+          git commit -m 'Update tf_output.json from CI agent' || echo 'No changes to commit'
+          git push origin main
+        env:
+          GIT_AUTHOR_NAME: CI Agent
+          GIT_AUTHOR_EMAIL: ci-agent@example.com
+          GIT_COMMITTER_NAME: CI Agent
+          GIT_COMMITTER_EMAIL: ci-agent@example.com
