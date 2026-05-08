@@ -12,6 +12,29 @@ on:
   workflow_dispatch:
 
 jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Data Engineering Repo
+        uses: actions/checkout@v4
+        with:
+          repository: mohamedamine050/data_eng
+          token: ${{ secrets.GH_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+
+      - run: |
+          pytest tests \
+            --cov=src \
+            --cov-report=xml \
+            --cov-fail-under=80
+
   sonar:
     runs-on: ubuntu-latest
     steps:
