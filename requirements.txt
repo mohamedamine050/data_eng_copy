@@ -1,0 +1,5 @@
+# Project dependencies
+# Core libraries (add as needed)
+
+# Development dependencies
+pytest>=7.0
