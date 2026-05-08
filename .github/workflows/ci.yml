@@ -18,7 +18,7 @@ jobs:
       - name: Checkout Data Engineering Repo
         uses: actions/checkout@v4
         with:
-          repository: https://github.com/mohamedamine050/data_eng
+          repository: mohamedamine050/data_eng
           token: ${ secrets.GH_TOKEN }
 
       - name: SonarQube Scan
