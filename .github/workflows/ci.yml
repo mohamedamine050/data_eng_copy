@@ -63,16 +63,3 @@ jobs:
 
       - name: Terraform Output
         run: terraform output -json > tf_output.json
-
-      - name: Push Terraform Outputs
-        run: |
-          git config --global user.email 'ci-agent@example.com'
-          git config --global user.name 'CI Agent'
-          git add tf_output.json
-          git commit -m 'Update tf_output.json from CI agent' || echo 'No changes to commit'
-          git push origin main
-        env:
-          GIT_AUTHOR_NAME: CI Agent
-          GIT_AUTHOR_EMAIL: ci-agent@example.com
-          GIT_COMMITTER_NAME: CI Agent
-          GIT_COMMITTER_EMAIL: ci-agent@example.com
