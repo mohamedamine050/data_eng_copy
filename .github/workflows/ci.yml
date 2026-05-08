@@ -42,7 +42,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: mohamedamine050/data_eng
-          token: ${ secrets.GH_TOKEN }
+          token: ${{ secrets.GH_TOKEN }}
 
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v3
