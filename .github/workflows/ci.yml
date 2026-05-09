@@ -29,18 +29,21 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-cov
 
-      - run: |
-          pytest tests \
-            --cov=src \
-            --cov-report=xml
+      - name: Run tests with coverage
+        run: |
+          pytest tests --cov=src --cov-report=xml --cov-report=term-missing
+          echo '=== Coverage files generated ===' 
+          ls -la coverage.xml || echo 'coverage.xml not found'
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
           path: coverage.xml
+          retention-days: 30
 
   sonar:
+    needs: unit-tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Data Engineering Repo
@@ -52,14 +55,18 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: coverage-report
-        continue-on-error: true
-      - name: Check coverage file exists
+          path: .
+      - name: Verify coverage file
         run: |
+          echo '=== Workspace contents ===' 
+          ls -la
           if [ -f coverage.xml ]; then
-            echo 'Coverage report found'
-            ls -lh coverage.xml
+            echo '✓ Coverage report found'
+            echo '=== Coverage file (first 20 lines) ===' 
+            head -20 coverage.xml
           else
-            echo 'Warning: coverage.xml not found'
+            echo '✗ ERROR: coverage.xml not found!'
+            exit 1
           fi
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v3
