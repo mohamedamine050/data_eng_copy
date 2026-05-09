@@ -114,3 +114,7 @@ jobs:
         run: |
           terraform init
           terraform apply -auto-approve
+
+      - name: Terraform Output
+        working-directory: infra
+        run: terraform output -json > tf_output.json
