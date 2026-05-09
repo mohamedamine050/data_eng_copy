@@ -1,0 +1,138 @@
+name: CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '.github/workflows/**'
+      - 'README.md'
+      - 'docs/**'
+      - '.env.example'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+
+      - name: Set SHA
+        run: echo "GIT_SHA=40a57b04cc5bfebc9f49f04e28e43e88bbe972ad" >> $GITHUB_ENV
+
+      - name: Build dependencies
+        run: |
+          mkdir -p build
+          pip install -r requirements.txt -t build/
+          cd build
+          zip -r ../dependencies.zip .
+
+      - name: Upload dependencies
+        run: |
+          aws s3 cp dependencies.zip s3://bucket/libs/dependencies-${GIT_SHA}.zip
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+
+      - name: Get Terraform outputs
+        run: |
+          echo "S3_BUCKET_1=$(terraform output -raw scripts_bucket_name)" >> $GITHUB_ENV
+          echo "S3_KEY_1=$(terraform output -raw scripts/glue_etl_test.py)" >> $GITHUB_ENV
+          echo "GLUE_JOB_1=$(terraform output -raw glue_job_name)" >> $GITHUB_ENV
+
+
+      - name: Build S3 path
+        run: |
+          echo "S3_PATH_1=s3://$S3_BUCKET_1/$S3_KEY_1" >> $GITHUB_ENV
+
+
+
+      - name: Replace Glue script in S3
+        run: |
+          aws s3 cp src/jobs/__init__.py $S3_PATH_1
+
+      # ─────────────────────────────
+      # 10. Trigger Glue Jobs + capturer les Run IDs
+      # FIX: on récupère les RUN_ID pour que le smoke test surveille
+      #      ces runs précis, sans relancer les jobs une 2ème fois
+      # ─────────────────────────────
+      - name: Trigger Glue Jobs
+        run: |
+          RUN1=$(aws glue start-job-run --job-name "$GLUE_JOB_1" --query 'JobRunId' --output text)
+          echo "RUN_ID_1=$RUN1" >> $GITHUB_ENV
+
+          echo "Jobs lancés : $RUN1"
+
+      # ─────────────────────────────
+      # 11. SMOKE TEST
+      # FIX 1: surveille les runs existants (RUN_ID) → plus de double lancement
+      # FIX 2: polling en parallèle (background) → tous les jobs checkés en même temps
+      # ─────────────────────────────
+      - name: Smoke Test - Validate Glue Jobs
+        run: |
+          set -euo pipefail
+
+          MAX_RETRIES=25
+          SLEEP_TIME=25
+
+          # Surveille un run déjà lancé (RUN_ID passé en argument)
+          # FIX : prend JOB_NAME + RUN_ID existant, ne relance PAS le job
+          watch_run() {
+            local JOB_NAME=$1
+            local RUN_ID=$2
+
+            echo "▶ Watching [$JOB_NAME] run: $RUN_ID"
+
+            local STATUS="STARTING"
+            local COUNT=0
+
+            while [[ "$STATUS" == "STARTING" || "$STATUS" == "RUNNING" ]]; do
+              STATUS=$(aws glue get-job-run \
+                --job-name "$JOB_NAME" \
+                --run-id "$RUN_ID" \
+                --query 'JobRun.JobRunState' \
+                --output text)
+
+              echo "  [$JOB_NAME] → $STATUS"
+
+              COUNT=$((COUNT + 1))
+              if [ "$COUNT" -ge "$MAX_RETRIES" ]; then
+                echo "❌ TIMEOUT: $JOB_NAME ($RUN_ID)"
+                return 1
+              fi
+
+              sleep "$SLEEP_TIME"
+            done
+
+            if [ "$STATUS" != "SUCCEEDED" ]; then
+              echo "❌ FAILED: $JOB_NAME ($RUN_ID) — état final: $STATUS"
+              return 1
+            fi
+
+            echo "✅ PASSED: $JOB_NAME"
+            return 0
+          }
+
+          watch_run "$GLUE_JOB_1" "$RUN_ID_1" &
+
+          # Attendre tous les processus et échouer si l'un d'eux échoue
+          FAILED=0
+          for pid in $(jobs -p); do
+            wait "$pid" || FAILED=1
+          done
+
+          if [ "$FAILED" -eq 1 ]; then
+            echo ""
+            echo "❌ Un ou plusieurs jobs Glue ont échoué."
+            exit 1
+          fi
+
+          echo ""
+          echo "✅ Tous les smoke tests sont passés."
