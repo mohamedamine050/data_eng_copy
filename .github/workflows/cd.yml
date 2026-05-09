@@ -34,8 +34,8 @@ jobs:
 
       - name: Get Terraform outputs
         run: |
-          echo "S3_BUCKET_1=$(terraform output -raw output_bucket_name)" >> $GITHUB_ENV
-          echo "S3_KEY_1=$(terraform output -raw scripts_bucket_name)" >> $GITHUB_ENV
+          echo "S3_BUCKET_1=$(terraform output -raw scripts_bucket_name)" >> $GITHUB_ENV
+          echo "S3_KEY_1=$(terraform output -raw scripts_key)" >> $GITHUB_ENV
           echo "GLUE_JOB_1=$(terraform output -raw glue_job_name)" >> $GITHUB_ENV
 
 
