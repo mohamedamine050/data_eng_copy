@@ -58,7 +58,7 @@ jobs:
 
       - name: Build S3 path
         run: |
-          echo "S3_PATH_1=s3://$S3_KEY_1" >> $GITHUB_ENV
+          echo "S3_PATH_1=$S3_KEY_1" >> $GITHUB_ENV
 
 
       - name: Debug S3 path
