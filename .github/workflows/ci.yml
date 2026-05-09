@@ -103,14 +103,14 @@ jobs:
 
       - uses: hashicorp/setup-terraform@v3
 
-      - name: Terraform Init
-        run: terraform init
+      - name: Bootstrap apply
+        working-directory: bootstrap
+        run: |
+          terraform init
+          terraform apply -auto-approve
 
-      - name: Terraform Plan
-        run: terraform plan -out=tfplan
-
-      - name: Terraform Apply
-        run: terraform apply -auto-approve tfplan
-
-      - name: Terraform Output
-        run: terraform output -json > tf_output.json
+      - name: Infra apply
+        working-directory: infra
+        run: |
+          terraform init
+          terraform apply -auto-approve
