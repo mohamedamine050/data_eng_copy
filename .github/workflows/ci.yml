@@ -48,10 +48,23 @@ jobs:
         with:
           repository: mohamedamine050/data_eng
           token: ${{ secrets.GH_TOKEN }}
+      - name: Download coverage report
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+        continue-on-error: true
+      - name: Check coverage file exists
+        run: |
+          if [ -f coverage.xml ]; then
+            echo 'Coverage report found'
+            ls -lh coverage.xml
+          else
+            echo 'Warning: coverage.xml not found'
+          fi
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v3
         with:
-          args: -Dsonar.projectKey=mohamedamine050_data_eng -Dsonar.organization=mohamedamine050
+          args: -Dsonar.projectKey=mohamedamine050_data_eng -Dsonar.organization=mohamedamine050 -Dsonar.coverageReportPaths=coverage.xml
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
