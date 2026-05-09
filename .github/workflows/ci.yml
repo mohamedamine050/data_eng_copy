@@ -31,12 +31,15 @@ jobs:
 
       - run: |
           pytest tests \
-              --cov=src \               --cov-report=xml
-      - name:  Upload coverage report
+            --cov=src \
+            --cov-report=xml
+
+      - name: Upload coverage report
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
-         Path: coverage.xml
+          path: coverage.xml
+
   sonar:
     runs-on: ubuntu-latest
     steps:
@@ -64,7 +67,7 @@ jobs:
       - name: Checkout Terraform Repo
         uses: actions/checkout@v4
         with:
-          repository: https://github.com/mohamedamine050/repo_terraforme
+          repository: mohamedamine050/repo_terraforme
           token: ${{ secrets.GH_TOKEN }}
 
       - name: Configure AWS Credentials
