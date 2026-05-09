@@ -33,18 +33,7 @@ jobs:
       - name: Get Terraform outputs
         run: |
           echo "S3_BUCKET_1=$(terraform output -raw scripts_bucket_name)" >> $GITHUB_ENV
-          S3_KEY_VALUE=""
-          for key_output in glue_script_key glue_script_s3_key glue_script_s3_uri script_key s3_key; do
-            if terraform output -raw "$key_output" >/dev/null 2>&1; then
-              S3_KEY_VALUE=$(terraform output -raw "$key_output")
-              break
-            fi
-          done
-          if [ -z "$S3_KEY_VALUE" ]; then S3_KEY_VALUE='scripts/glue_etl_test.py'; fi
-          if echo "$S3_KEY_VALUE" | grep -q '^s3://'; then
-            S3_KEY_VALUE=$(echo "$S3_KEY_VALUE" | sed -E 's#^s3://[^/]+/##')
-          fi
-          echo "S3_KEY_1=$S3_KEY_VALUE" >> $GITHUB_ENV
+          echo "S3_KEY_1=$(terraform output -raw glue_script_s3_uri)" >> $GITHUB_ENV
           echo "GLUE_JOB_1=$(terraform output -raw glue_job_name)" >> $GITHUB_ENV
 
 
