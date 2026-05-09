@@ -16,7 +16,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Terraform Repo
+        uses: actions/checkout@v4
+        with:
+          repository: mohamedamine050/repo_infra
+          token: ${{ secrets.GH_TOKEN }}
 
       - uses: actions/setup-python@v5
         with:
