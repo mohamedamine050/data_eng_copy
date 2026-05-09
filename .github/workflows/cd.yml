@@ -21,7 +21,6 @@ jobs:
         with:
           repository: mohamedamine050/repo_infra
           token: ${{ secrets.GH_TOKEN }}
-          path: infra                   
 
       - name: Checkout Data Repo
         uses: actions/checkout@v4
