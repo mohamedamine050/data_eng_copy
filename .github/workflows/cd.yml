@@ -61,6 +61,12 @@ jobs:
           echo "S3_PATH_1=s3://$S3_BUCKET_1/$S3_KEY_1" >> $GITHUB_ENV
 
 
+      - name: Debug S3 path
+        run: |
+          echo "BUCKET=$S3_BUCKET_1"
+          echo "KEY=$S3_KEY_1"
+          echo "FULL=$S3_PATH_1"
+
 
       - name: Replace Glue script in S3
         run: |
