@@ -16,17 +16,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Terraform Repo
-        uses: actions/checkout@v4
-        with:
-          repository: mohamedamine050/repo_infra
-          token: ${{ secrets.GH_TOKEN }}
-
       - name: Checkout Data Repo
         uses: actions/checkout@v4
         with:
           repository: mohamedamine050/data_eng
           token: ${{ secrets.GH_TOKEN }}
+
+      - name: Checkout Terraform Repo
+        uses: actions/checkout@v4
+        with:
+          repository: mohamedamine050/repo_infra
+          token: ${{ secrets.GH_TOKEN }}
+          path: terraform
 
       - uses: actions/setup-python@v5
         with:
@@ -43,12 +44,12 @@ jobs:
         uses: hashicorp/setup-terraform@v3
 
       - name: Terraform Init
-        working-directory: infra
+        working-directory: terraform/infra
         run: |
           terraform init -input=false
 
       - name: Get Terraform Outputs
-        working-directory: infra
+        working-directory: terraform/infra
         run: |
           echo "S3_BUCKET_1=$(terraform output -raw scripts_bucket_name)" >> $GITHUB_ENV
           echo "S3_KEY_1=$(terraform output -raw glue_script_s3_uri)" >> $GITHUB_ENV
