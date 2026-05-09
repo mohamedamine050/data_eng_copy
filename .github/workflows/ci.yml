@@ -35,6 +35,12 @@ jobs:
           echo '=== Coverage files generated ===' 
           ls -la coverage.xml || echo 'coverage.xml not found'
 
+      - name: Fix coverage report paths
+        run: |
+          sed -i 's|/home/runner/work/data_eng/data_eng/||g' coverage.xml
+          echo '=== Fixed coverage.xml ===' 
+          head -5 coverage.xml
+
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
         with:
@@ -58,12 +64,17 @@ jobs:
           path: .
       - name: Verify coverage file
         run: |
-          echo '=== Workspace contents ===' 
+          echo '=== Checking workspace ===' 
           ls -la
           if [ -f coverage.xml ]; then
             echo '✓ Coverage report found'
-            echo '=== Coverage file (first 20 lines) ===' 
-            head -20 coverage.xml
+            echo '=== Verifying paths in coverage.xml ===' 
+            if grep -q '/home/runner/work' coverage.xml; then
+              echo '⚠ WARNING: Still contains absolute paths, fixing...'
+              sed -i 's|/home/runner/work/data_eng/data_eng/||g' coverage.xml
+            fi
+            echo '=== Coverage file (first 10 lines) ===' 
+            head -10 coverage.xml
           else
             echo '✗ ERROR: coverage.xml not found!'
             exit 1
