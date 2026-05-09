@@ -22,6 +22,12 @@ jobs:
           repository: mohamedamine050/repo_infra
           token: ${{ secrets.GH_TOKEN }}
 
+      - name: Checkout Data Repo
+        uses: actions/checkout@v4
+        with:
+          repository: mohamedamine050/data_eng
+          token: ${{ secrets.GH_TOKEN }}
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -35,6 +41,9 @@ jobs:
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        working-directory: infra
 
       - name: Get Terraform outputs
         run: |
