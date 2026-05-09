@@ -21,6 +21,7 @@ jobs:
         with:
           repository: mohamedamine050/repo_infra
           token: ${{ secrets.GH_TOKEN }}
+          path: infra                   
 
       - name: Checkout Data Repo
         uses: actions/checkout@v4
@@ -47,7 +48,8 @@ jobs:
         run: |
           terraform init -input=false
 
-      - name: Get Terraform Output
+      - name: Get Terraform Outputs
+        working-directory: infra
         run: |
           echo "S3_BUCKET_1=$(terraform output -raw scripts_bucket_name)" >> $GITHUB_ENV
           echo "S3_KEY_1=$(terraform output -raw glue_script_s3_uri)" >> $GITHUB_ENV
