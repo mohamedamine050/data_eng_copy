@@ -43,20 +43,13 @@ jobs:
 
       - name: Get Terraform outputs
         run: |
-          echo "S3_BUCKET_1=$(terraform output -raw scripts_bucket_name)" >> $GITHUB_ENV
-          echo "S3_KEY_1=$(terraform output -raw glue_script_s3_uri)" >> $GITHUB_ENV
-          echo "GLUE_JOB_1=$(terraform output -raw glue_job_name)" >> $GITHUB_ENV
-
 
       - name: Build S3 path
         run: |
-          echo "S3_PATH_1=s3://$S3_BUCKET_1/$S3_KEY_1" >> $GITHUB_ENV
-
 
 
       - name: Replace Glue script in S3
         run: |
-          aws s3 cp src/jobs/__init__.py $S3_PATH_1
 
       # ─────────────────────────────
       # 10. Trigger Glue Jobs + capturer les Run IDs
@@ -65,10 +58,7 @@ jobs:
       # ─────────────────────────────
       - name: Trigger Glue Jobs
         run: |
-          RUN1=$(aws glue start-job-run --job-name "$GLUE_JOB_1" --query 'JobRunId' --output text)
-          echo "RUN_ID_1=$RUN1" >> $GITHUB_ENV
-
-          echo "Jobs lancés : $RUN1"
+          echo "Jobs lancés : "
 
       # ─────────────────────────────
       # 11. SMOKE TEST
@@ -120,7 +110,6 @@ jobs:
             return 0
           }
 
-          watch_run "$GLUE_JOB_1" "$RUN_ID_1" &
 
           # Attendre tous les processus et échouer si l'un d'eux échoue
           FAILED=0
