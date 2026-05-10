@@ -108,7 +108,6 @@ jobs:
         working-directory: bootstrap
         run: |
           terraform init
-          terraform apply -auto-approve
 
       - name: Infra apply
         working-directory: infra
@@ -119,3 +118,16 @@ jobs:
       - name: Terraform Output
         working-directory: infra
         run: terraform output -json > tf_output.json
+
+      - name: Get S3 bucket name (bootstrap)
+        working-directory: bootstrap
+        run: |
+          echo '=== Fetching s3_bucket_name from Terraform outputs ==='
+          if terraform output -raw s3_bucket_name >/dev/null 2>&1; then
+            S3_NAME=$(terraform output -raw s3_bucket_name)
+            echo "S3_BUCKET_NAME=$S3_NAME"
+            # write to file so later steps (or external callers) can fetch it if needed
+            echo $S3_NAME > s3_bucket_name.txt
+          else
+            echo '⚠ s3_bucket_name output not found'
+          fi
