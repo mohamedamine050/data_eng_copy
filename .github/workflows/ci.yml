@@ -110,11 +110,12 @@ jobs:
           terraform init
           terraform apply -auto-approve
 
-      - name: Get S3 bucket name
-        working-directory: bootstrap
+      - name: Get Terraform outputs
+        working-directory: terraform/bootstrap
         run: |
+          terraform init
           S3_BUCKET=$(terraform output -raw s3_bucket_name)
-          echo "S3_BUCKET=$S3_BUCKET"
+          echo "S3 bucket name: $S3_BUCKET"
           echo "S3_BUCKET=$S3_BUCKET" >> $GITHUB_ENV
 
       - name: Infra apply
