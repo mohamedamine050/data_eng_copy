@@ -104,17 +104,24 @@ jobs:
 
       - uses: hashicorp/setup-terraform@v3
 
-      - name: Bootstrap apply
+      # Bootstrap
+      # ─────────────────────────────
+      - name: Bootstrap Init
         working-directory: bootstrap
         run: |
-          terraform init
+          terraform init -input=false
 
-      - name: Get Terraform outputs
-        working-directory: terraform/bootstrap
+      - name: Debug Bootstrap Outputs
+        working-directory: bootstrap
+        run: terraform output
+
+      - name: Get Bootstrap Outputs
+        working-directory: bootstrap
         run: |
-          terraform init
           S3_BUCKET=$(terraform output -raw s3_bucket_name)
+
           echo "S3 bucket name: $S3_BUCKET"
+
           echo "S3_BUCKET=$S3_BUCKET" >> $GITHUB_ENV
 
       - name: Infra apply
