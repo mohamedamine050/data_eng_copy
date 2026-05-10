@@ -108,11 +108,14 @@ jobs:
         working-directory: bootstrap
         run: |
           terraform init
+          terraform apply -auto-approve
 
       - name: Get S3 bucket name
         working-directory: bootstrap
         run: |
-          echo "S3_BUCKET=$(terraform output -raw s3_bucket_name)" >> $GITHUB_ENV
+          S3_BUCKET=$(terraform output -raw s3_bucket_name)
+          echo "S3_BUCKET=$S3_BUCKET"
+          echo "S3_BUCKET=$S3_BUCKET" >> $GITHUB_ENV
 
       - name: Infra apply
         working-directory: infra
