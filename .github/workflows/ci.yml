@@ -104,11 +104,6 @@ jobs:
 
       - uses: hashicorp/setup-terraform@v3
 
-      - name: Bootstrap apply
-        working-directory: bootstrap
-        run: |
-          terraform init
-
       - name: Infra apply
         working-directory: infra
         run: |
@@ -119,29 +114,16 @@ jobs:
         working-directory: infra
         run: terraform output -json > tf_output.json
 
-      - name: Get S3 bucket name (bootstrap)
-        id: get_s3
+      - name: Get Terraform output (bootstrap)
         working-directory: bootstrap
         run: |
-          echo '=== Fetching s3_bucket_name from Terraform outputs ==='
-          # Print the raw output if available (do not fail the step if missing)
-          set +e
-          S3_NAME=$(terraform output -raw s3_bucket_name 2>/dev/null || true)
-          set -e
-          # Always echo the result (empty if not present) and export to GITHUB_OUTPUT
-          echo "S3_BUCKET_NAME=$S3_NAME"
-          echo "s3_bucket_name=$S3_NAME" >> $GITHUB_OUTPUT
-          if [ -z "$S3_NAME" ]; then
-            echo '⚠ WARNING: s3_bucket_name is empty or not defined. Showing all Terraform outputs for debugging:'
-            terraform output || echo 'No outputs available'
-          else
-            # persist to file for downstream consumers
-            echo $S3_NAME > s3_bucket_name.txt
-          fi
-    outputs:
-      s3_bucket_name: ${{ steps.get_s3.outputs.s3_bucket_name }}
+          terraform init
 
-outputs:
-  s3_bucket_name:
-    description: S3 bucket name from infra provisioning
-    value: ${{ jobs.infra-provisioning.outputs.s3_bucket_name }}
+          echo "Extracting outputs..."
+          S3_BUCKET_=$(terraform output -raw s3_bucket_name)
+
+          echo "S3_BUCKET=$S3_BUCKET" >> $GITHUB_ENV
+
+      - name: Use S3 bucket
+        run: |
+          echo "Bucket is: $S3_BUCKET"
