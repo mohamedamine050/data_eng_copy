@@ -108,7 +108,6 @@ jobs:
         working-directory: bootstrap
         run: |
           terraform init
-          terraform apply -auto-approve
 
       - name: Get Terraform outputs
         working-directory: terraform/bootstrap
