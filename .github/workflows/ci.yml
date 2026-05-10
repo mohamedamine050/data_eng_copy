@@ -124,10 +124,17 @@ jobs:
         run: |
           echo '=== Fetching s3_bucket_name from Terraform outputs ==='
           if terraform output -raw s3_bucket_name >/dev/null 2>&1; then
-            S3_NAME=$(terraform output -raw s3_bucket_name)
-            echo "S3_BUCKET_NAME=$S3_NAME"
-            # write to file so later steps (or external callers) can fetch it if needed
-            echo $S3_NAME > s3_bucket_name.txt
+            S3_NAME=$(terraform output -raw s3_bucket_name 2>&1)
+            if [ -z "$S3_NAME" ]; then
+              echo '⚠ WARNING: s3_bucket_name output exists but is EMPTY'
+              echo 'Available outputs:'
+              terraform output
+            else
+              echo "S3_BUCKET_NAME=$S3_NAME"
+              echo $S3_NAME > s3_bucket_name.txt
+            fi
           else
-            echo '⚠ s3_bucket_name output not found'
+            echo '⚠ ERROR: s3_bucket_name output not found in bootstrap module'
+            echo 'Available outputs:'
+            terraform output 2>&1 || echo 'No outputs available'
           fi
