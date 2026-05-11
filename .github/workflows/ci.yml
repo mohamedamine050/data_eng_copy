@@ -137,5 +137,6 @@ jobs:
         working-directory: infra
         run: |
           terraform output -json > tf_output.json
-          TF_OUTPUT_B64=$(cat tf_output.json | base64 -w 0)
-          echo "TF_OUTPUT=$TF_OUTPUT_B64" >> $GITHUB_ENV
+          echo "=== Terraform Outputs (JSON) ==="
+          cat tf_output.json
+          echo "=== End Terraform Outputs ==="
