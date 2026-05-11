@@ -135,9 +135,12 @@ jobs:
 
       - name: Terraform Output
         working-directory: infra
-        run: |
-          terraform output -json > tf_output.json
-          TF_OUTPUT_B64=$(cat tf_output.json | base64 -w 0)
-          echo "TF_OUTPUT=$TF_OUTPUT_B64" >> $GITHUB_ENV
-          # Also print to logs so the agent can capture the base64 payload
-          echo "TF_OUTPUT=$TF_OUTPUT_B64"
+        run: terraform output -json > tf_output.json
+
+      - name: Upload Terraform Output
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: terraform-output
+          path: infra/tf_output.json
+          retention-days: 30
