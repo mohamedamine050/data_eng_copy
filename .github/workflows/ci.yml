@@ -12,10 +12,8 @@ on:
   workflow_dispatch:
 
 jobs:
-
   unit-tests:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Data Engineering Repo
         uses: actions/checkout@v4
@@ -23,13 +21,11 @@ jobs:
           repository: mohamedamine050/data_eng
           token: ${{ secrets.GH_TOKEN }}
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
-        run: |
+      - run: |
           pip install -r requirements.txt
           pip install pytest pytest-cov
 
@@ -44,62 +40,53 @@ jobs:
           path: coverage.xml
           retention-days: 30
 
-
   sonar:
     needs: unit-tests
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Data Engineering Repo
         uses: actions/checkout@v4
         with:
           repository: mohamedamine050/data_eng
           token: ${{ secrets.GH_TOKEN }}
-
       - name: Download coverage report
         uses: actions/download-artifact@v4
         with:
           name: coverage-report
           path: .
-
       - name: Verify coverage file
         run: |
+          echo '=== Checking workspace ===' 
           ls -la
-
-          if [ ! -f coverage.xml ]; then
-            echo "ERROR: coverage.xml not found"
+          if [ -f coverage.xml ]; then
+            echo '✓ Coverage report found'
+            echo '=== Verifying paths in coverage.xml ===' 
+            if grep -q '/home/runner/work' coverage.xml; then
+              echo '⚠ WARNING: Still contains absolute paths, fixing...'
+              sed -i 's|/home/runner/work/data_eng/data_eng/||g' coverage.xml
+            fi
+            echo '=== Coverage file (first 10 lines) ===' 
+            head -10 coverage.xml
+          else
+            echo '✗ ERROR: coverage.xml not found!'
             exit 1
           fi
-
-          if grep -q '/home/runner/work' coverage.xml; then
-            echo "Fixing absolute paths..."
-            sed -i 's|/home/runner/work/data_eng/data_eng/||g' coverage.xml
-          fi
-
-          head -10 coverage.xml
-
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v3
         with:
-          args: >
-            -Dsonar.projectKey=mohamedamine050_data_eng
-            -Dsonar.organization=mohamedamine050
-            -Dsonar.python.coverage.reportPaths=coverage.xml
+          args: -Dsonar.projectKey=mohamedamine050_data_eng -Dsonar.organization=mohamedamine050 -Dsonar.python.coverage.reportPaths=coverage.xml
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-
       - name: Quality Gate check
         uses: SonarSource/sonarqube-quality-gate-action@v1
         timeout-minutes: 5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-
   infra-provisioning:
     needs: sonar
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Terraform Repo
         uses: actions/checkout@v4
@@ -114,11 +101,9 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
 
+      - uses: hashicorp/setup-terraform@v3
 
-      # ─────────────────────────────
       # BOOTSTRAP (S3 + DynamoDB)
       # ─────────────────────────────
       - name: Bootstrap Init
@@ -142,18 +127,12 @@ jobs:
           echo "S3_BUCKET=$S3_BUCKET"
           echo "S3_BUCKET=$S3_BUCKET" >> $GITHUB_ENV
 
-
-      # ─────────────────────────────
-      # INFRA
-      # ─────────────────────────────
-      - name: Infra Init
+      - name: Infra apply
         working-directory: infra
-        run: terraform init
+        run: |
+          terraform init
+          terraform apply -auto-approve
 
-      - name: Infra Apply
-        working-directory: infra
-        run: terraform apply -auto-approve
-
-      - name: Export Terraform Outputs
+      - name: Terraform Output
         working-directory: infra
         run: terraform output -json > tf_output.json
