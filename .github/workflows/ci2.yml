@@ -112,18 +112,7 @@ jobs:
 
       # NOTE: Bootstrap Apply SKIPPED for first_push
 
-      - name: Get Bootstrap Outputs
-        working-directory: bootstrap
-        run: |
-          S3_BUCKET=$(terraform output -raw s3_bucket_name || echo "")
-
-          if [ -z "$S3_BUCKET" ]; then
-            echo "ERROR: S3_BUCKET is empty"
-            exit 1
-          fi
-
-          echo "S3_BUCKET=$S3_BUCKET"
-          echo "S3_BUCKET=$S3_BUCKET" >> $GITHUB_ENV
+     
 
       - name: Infra apply
         working-directory: infra
