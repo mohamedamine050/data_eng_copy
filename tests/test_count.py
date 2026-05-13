@@ -7,7 +7,7 @@ import importlib
 def test_glue_job_saves_csv():
 
     # =========================
-    # 1. MOCK MODULES + FUNCTIONS
+    # 1. MOCK AWS GLUE
     # =========================
     mock_utils = types.ModuleType("awsglue.utils")
     mock_utils.getResolvedOptions = MagicMock(return_value={
@@ -18,16 +18,22 @@ def test_glue_job_saves_csv():
     sys.modules["awsglue.context"] = types.ModuleType("awsglue.context")
     sys.modules["awsglue"] = types.ModuleType("awsglue")
 
-    sys.modules["pyspark.context"] = types.ModuleType("pyspark.context")
+    # =========================
+    # 2. MOCK PYSPARK CONTEXT + CLASS
+    # =========================
+    mock_pyspark_context = types.ModuleType("pyspark.context")
+    mock_pyspark_context.SparkContext = MagicMock()
+
     sys.modules["pyspark"] = types.ModuleType("pyspark")
+    sys.modules["pyspark.context"] = mock_pyspark_context
 
     # =========================
-    # 2. ARGS
+    # 3. ARGS
     # =========================
     sys.argv = ["job.py", "--output_path", "s3://fake-bucket/output"]
 
     # =========================
-    # 3. MOCK SPARK
+    # 4. MOCK SPARK
     # =========================
     mock_df = MagicMock()
 
@@ -41,24 +47,20 @@ def test_glue_job_saves_csv():
     mock_spark.createDataFrame.return_value = mock_df
 
     # =========================
-    # 4. MOCK GLUE CONTEXT
+    # 5. MOCK GLUE CONTEXT
     # =========================
     mock_glue_context = MagicMock()
     mock_glue_context.spark_session = mock_spark
 
     # =========================
-    # 5. PATCH AWS CLASSES ONLY
+    # 6. TEST
     # =========================
-    with patch("pyspark.context.SparkContext"), \
-         patch("awsglue.context.GlueContext", return_value=mock_glue_context):
+    with patch("awsglue.context.GlueContext", return_value=mock_glue_context):
 
         import src.jobs.count_and_save_in_csv as job
         importlib.reload(job)
 
         job.main()
 
-        # =========================
-        # 6. ASSERTIONS
-        # =========================
         mock_spark.createDataFrame.assert_called_once()
         mock_writer.csv.assert_called_once_with("s3://fake-bucket/output")
