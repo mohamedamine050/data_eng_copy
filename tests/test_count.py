@@ -14,8 +14,11 @@ def test_glue_job_saves_csv():
         "output_path": "s3://fake-bucket/output"
     })
 
+    mock_glue_context_module = types.ModuleType("awsglue.context")
+    mock_glue_context_module.GlueContext = MagicMock()  # ← FIX: attribut manquant
+
     sys.modules["awsglue.utils"] = mock_utils
-    sys.modules["awsglue.context"] = types.ModuleType("awsglue.context")
+    sys.modules["awsglue.context"] = mock_glue_context_module
     sys.modules["awsglue"] = types.ModuleType("awsglue")
 
     # =========================
@@ -56,10 +59,8 @@ def test_glue_job_saves_csv():
     # 6. TEST
     # =========================
     with patch("awsglue.context.GlueContext", return_value=mock_glue_context):
-
         import src.jobs.count_and_save_in_csv as job
         importlib.reload(job)
-
         job.main()
 
         mock_spark.createDataFrame.assert_called_once()
