@@ -14,13 +14,12 @@ output_path = args['output_path']
 
 # Générer les données 1 → 20
 data = [(i,) for i in range(1, 21)]
-
 df = spark.createDataFrame(data, ["number"])
-
 df.show()
 
-# Write vers S3 (path déjà fourni par Terraform)
-df.write \
+# Write vers S3 en UN SEUL fichier CSV
+df.coalesce(1) \
+    .write \
     .mode("overwrite") \
     .option("header", "true") \
     .csv(output_path)
