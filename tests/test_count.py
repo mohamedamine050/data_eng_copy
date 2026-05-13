@@ -1,7 +1,7 @@
 import sys
 import types
 import importlib
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 
 def test_glue_job_saves_csv():
@@ -58,23 +58,22 @@ def test_glue_job_saves_csv():
     sys.argv = ["job.py", "--output_path", "s3://fake-bucket/output"]
 
     # =========================
-    # 6. IMPORT + RELOAD  (le code s'exécute ici au niveau module)
+    # 6. IMPORT UNIQUE  ← FIX: on vide le cache d'abord, pas de reload
     # =========================
-    import src.jobs.count_and_save_in_csv as job
-    importlib.reload(job)
+    sys.modules.pop("src.jobs.count_and_save_in_csv", None)
+    import src.jobs.count_and_save_in_csv  # noqa: F401  (exécution unique)
 
     # =========================
     # 7. ASSERTIONS
     # =========================
-    # Un DataFrame a bien été créé avec 20 lignes (1 → 20)
     mock_spark.createDataFrame.assert_called_once()
+
     args_call, _ = mock_spark.createDataFrame.call_args
     data_arg = args_call[0]
     assert data_arg == [(i,) for i in range(1, 21)], (
         f"Expected 20 rows (1→20), got: {data_arg}"
     )
 
-    # Le CSV a bien été écrit vers le bon chemin S3
     mock_writer.mode.assert_called_once_with("overwrite")
     mock_writer.option.assert_called_once_with("header", "true")
     mock_writer.csv.assert_called_once_with("s3://fake-bucket/output")
