@@ -8,9 +8,15 @@ def run_job():
     from awsglue.context import GlueContext
     from awsglue.utils import getResolvedOptions
 
+    # -----------------------------
+    # Args Glue
+    # -----------------------------
     args = getResolvedOptions(sys.argv, ['CONFIG_PATH'])
     config_path = args['CONFIG_PATH']
 
+    # -----------------------------
+    # Read config from S3
+    # -----------------------------
     parsed = urlparse(config_path)
     bucket = parsed.netloc
     key = parsed.path.lstrip('/')
@@ -22,15 +28,24 @@ def run_job():
     output_bucket = config["OUTPUT_BUCKET_NAME"]
     output_path = f"s3://{output_bucket}/output/"
 
+    # -----------------------------
+    # Spark / Glue
+    # -----------------------------
     sc = SparkContext()
     glueContext = GlueContext(sc)
     spark = glueContext.spark_session
 
+    # -----------------------------
+    # Data processing
+    # -----------------------------
     data = [(i,) for i in range(1, 21)]
     df = spark.createDataFrame(data, ["number"])
+    df = df.coalesce(1)
 
-    df.coalesce(1) \
-        .write \
+    # -----------------------------
+    # Write CSV
+    # -----------------------------
+    df.write \
         .mode("overwrite") \
         .option("header", "true") \
         .csv(output_path)
