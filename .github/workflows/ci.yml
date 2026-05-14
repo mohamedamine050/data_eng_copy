@@ -49,7 +49,6 @@ jobs:
         with:
           repository: mohamedamine050/data_eng
           token: ${{ secrets.GH_TOKEN }}
-          fetch-depth: 0  # <--- INDISPENSABLE pour le Quality Gate (info de blame)
       - name: Download coverage report
         uses: actions/download-artifact@v4
         with:
@@ -92,7 +91,7 @@ jobs:
       - name: Checkout Terraform Repo
         uses: actions/checkout@v4
         with:
-          repository: mohamedamine050/repo_infra
+          repository: mohamedamine050/terraform-ETL_spark_loading_csv-7dab8a2d
           token: ${{ secrets.GH_TOKEN }}
 
       - name: Configure AWS Credentials
