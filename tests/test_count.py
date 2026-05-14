@@ -1,70 +1,71 @@
 import unittest
-from unittest.mock import MagicMock, patch
-import json
-from pyspark.sql import SparkSession
-
-# On simule les modules AWS Glue qui ne sont pas présents localement
+from unittest.mock import patch, MagicMock, mock_open
 import sys
-sys.modules['awsglue'] = MagicMock()
-sys.modules['awsglue.utils'] = MagicMock()
+import json
+
+# Simulation des modules AWS Glue absents en local
+mock_glue = MagicMock()
+sys.modules['awsglue'] = mock_glue
 sys.modules['awsglue.context'] = MagicMock()
+sys.modules['awsglue.utils'] = MagicMock()
+sys.modules['awsglue.job'] = MagicMock()
+
+# Import des fonctions à tester après le mocking
+from glue_script import get_s3_config
 
 class TestGlueJob(unittest.TestCase):
 
-    @classmethod
-    def setUpClass(cls):
-        # Création d'une session Spark locale pour les tests
-        cls.spark = SparkSession.builder \
-            .master("local[1]") \
-            .appName("GlueUnitTest") \
-            .getOrCreate()
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.spark.stop()
-
     @patch('boto3.client')
-    @patch('awsglue.utils.getResolvedOptions')
-    def test_config_parsing_and_write(self, mock_get_options, mock_boto):
-        # 1. Mock des arguments Glue
-        mock_get_options.return_value = {'CONFIG_PATH': 's3://my-bucket/config.json'}
+    def test_get_s3_config(self, mock_boto_client):
+        """Vérifie que la lecture du JSON S3 fonctionne correctement."""
+        # Setup du mock S3
+        mock_s3 = MagicMock()
+        mock_boto_client.return_value = mock_s3
+        
+        mock_data = {"OUTPUT_BUCKET_NAME": "test-bucket"}
+        mock_body = MagicMock()
+        mock_body.read.return_value = json.dumps(mock_data).encode('utf-8')
+        mock_s3.get_object.return_value = {"Body": mock_body}
 
-        # 2. Mock de la réponse S3 (Boto3)
+        # Appel de la fonction
+        config = get_s3_config(mock_s3, "s3://fake-bucket/config.json")
+
+        # Assertions
+        self.assertEqual(config["OUTPUT_BUCKET_NAME"], "test-bucket")
+        mock_s3.get_object.assert_called_with(Bucket="fake-bucket", Key="config.json")
+
+    @patch('glue_script.SparkContext')
+    @patch('glue_script.GlueContext')
+    @patch('glue_script.Job')
+    @patch('glue_script.getResolvedOptions')
+    @patch('glue_script.boto3.client')
+    def test_run_job_flow(self, mock_boto, mock_get_args, mock_job, mock_glue_ctx, mock_sc):
+        """Vérifie le flux complet du job (initialisation et appels)."""
+        
+        # 1. Mock des arguments
+        mock_get_args.return_value = {'JOB_NAME': 'test_job', 'CONFIG_PATH': 's3://b/c.json'}
+        
+        # 2. Mock de la config S3
         mock_s3 = MagicMock()
         mock_boto.return_value = mock_s3
-        
-        config_data = {"OUTPUT_BUCKET_NAME": "test-output-bucket"}
-        body_mock = MagicMock()
-        body_mock.read.return_value = json.dumps(config_data).encode('utf-8')
-        mock_s3.get_object.return_value = {'Body': body_mock}
+        mock_body = MagicMock()
+        mock_body.read.return_value = json.dumps({"OUTPUT_BUCKET_NAME": "out"}).encode('utf-8')
+        mock_s3.get_object.return_value = {"Body": mock_body}
 
-        # 3. Logique de test (Simulation du flux du script)
-        # Simulation extraction config
-        bucket = "my-bucket"
-        key = "config.json"
-        response = mock_s3.get_object(Bucket=bucket, Key=key)
-        config = json.loads(response["Body"].read().decode("utf-8"))
+        # 3. Mock Spark Session
+        mock_spark = mock_glue_ctx.return_value.spark_session
         
-        output_path = f"s3://{config['OUTPUT_BUCKET_NAME']}/output/"
+        # Import local pour éviter les effets de bord
+        from glue_script import run_job
         
-        # Validation de la construction du chemin
-        self.assertEqual(output_path, "s3://test-output-bucket/output/")
+        # Exécution
+        run_job()
 
-        # 4. Test de la création du DataFrame Spark
-        data = [(i,) for i in range(1, 21)]
-        df = self.spark.createDataFrame(data, ["number"])
-        
-        self.assertEqual(df.count(), 20)
-        self.assertEqual(len(df.columns), 1)
-
-    def test_data_logic(self):
-        # Test spécifique sur la transformation de données
-        data = [(i,) for i in range(1, 21)]
-        df = self.spark.createDataFrame(data, ["number"])
-        
-        # Vérifier que le max est bien 20
-        max_val = df.agg({"number": "max"}).collect()[0][0]
-        self.assertEqual(max_val, 20)
+        # Vérifications
+        mock_job.return_value.init.assert_called()
+        mock_job.return_value.commit.assert_called()
+        mock_spark.createDataFrame.assert_called()
+        print("\n✅ Test du flux complet réussi.")
 
 if __name__ == '__main__':
     unittest.main()
