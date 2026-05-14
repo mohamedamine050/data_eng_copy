@@ -1,30 +1,48 @@
+import sys
 import json
+import types
 from unittest.mock import Mock, patch
 
+# ---------------------------------------------------
+# FAKE AWS MODULES (IMPORTANT)
+# ---------------------------------------------------
+sys.modules["awsglue"] = types.ModuleType("awsglue")
+sys.modules["awsglue.context"] = types.ModuleType("awsglue.context")
+sys.modules["awsglue.utils"] = types.ModuleType("awsglue.utils")
+
+sys.modules["pyspark"] = types.ModuleType("pyspark")
+sys.modules["pyspark.context"] = types.ModuleType("pyspark.context")
+
+
+# 👉 IMPORTANT: inject GlueContext inside fake module
+from awsglue.context import GlueContext
+awsglue.context.GlueContext = Mock
+
+
+# ---------------------------------------------------
+# IMPORT AFTER MOCKING (CRITICAL)
+# ---------------------------------------------------
 from src.jobs.count_and_save_in_csv import run_job
 
 
+# ---------------------------------------------------
+# TEST
+# ---------------------------------------------------
 @patch("src.jobs.count_and_save_in_csv.boto3.client")
 @patch("src.jobs.count_and_save_in_csv.getResolvedOptions")
 @patch("src.jobs.count_and_save_in_csv.SparkContext")
-@patch("src.jobs.count_and_save_in_csv.GlueContext")  # 👈 IMPORTANT: patch direct import in module
-def test_run_job_success(
-    mock_glue,
-    mock_spark,
-    mock_args,
-    mock_boto
-):
+def test_run_job_success(mock_spark, mock_args, mock_boto):
 
-    # -------------------------
-    # Args Glue
-    # -------------------------
+    # -----------------------------
+    # Args
+    # -----------------------------
     mock_args.return_value = {
         "CONFIG_PATH": "s3://my-bucket/config.json"
     }
 
-    # -------------------------
+    # -----------------------------
     # S3 mock
-    # -------------------------
+    # -----------------------------
     s3 = Mock()
     mock_boto.return_value = s3
 
@@ -38,9 +56,9 @@ def test_run_job_success(
         )
     }
 
-    # -------------------------
+    # -----------------------------
     # Spark mock
-    # -------------------------
+    # -----------------------------
     df = Mock()
     writer = Mock()
 
@@ -57,17 +75,18 @@ def test_run_job_success(
     glue_instance = Mock()
     glue_instance.spark_session = spark
 
-    mock_glue.return_value = glue_instance
+    # patch GlueContext constructor result
+    awsglue.context.GlueContext.return_value = glue_instance
     mock_spark.return_value = Mock()
 
-    # -------------------------
+    # -----------------------------
     # RUN
-    # -------------------------
+    # -----------------------------
     run_job()
 
-    # -------------------------
-    # ASSERTIONS
-    # -------------------------
+    # -----------------------------
+    # ASSERT
+    # -----------------------------
     s3.get_object.assert_called_once()
     spark.createDataFrame.assert_called_once()
     writer.csv.assert_called_once()
