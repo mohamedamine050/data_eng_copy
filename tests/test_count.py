@@ -27,6 +27,8 @@ def test_run_job_logic(mock_sc, mock_glue_context, mock_boto, mock_args, spark):
     # 1. Mock des arguments Glue
     mock_args.return_value = {'CONFIG_PATH': 's3://fake-bucket/config.json'}
 
+     # 1. Mock des arguments Glue # 1. Mock des arguments Glue # 1. Mock des arguments Glue # 1. Mock des arguments Glue
+
     # 2. Mock de S3 (lecture config)
     mock_s3_client = MagicMock()
     mock_boto.return_value = mock_s3_client
