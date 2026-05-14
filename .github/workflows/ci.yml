@@ -49,6 +49,7 @@ jobs:
         with:
           repository: mohamedamine050/data_eng
           token: ${{ secrets.GH_TOKEN }}
+          fetch-depth: 0  # <--- INDISPENSABLE pour le Quality Gate (info de blame)
       - name: Download coverage report
         uses: actions/download-artifact@v4
         with:
