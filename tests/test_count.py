@@ -1,71 +1,91 @@
-import unittest
-from unittest.mock import patch, MagicMock, mock_open
 import sys
 import json
+import types
+from unittest.mock import Mock, patch
 
-# Simulation des modules AWS Glue absents en local
-mock_glue = MagicMock()
-sys.modules['awsglue'] = mock_glue
-sys.modules['awsglue.context'] = MagicMock()
-sys.modules['awsglue.utils'] = MagicMock()
-sys.modules['awsglue.job'] = MagicMock()
+# -------------------------------------------------------
+# Mock AWS Glue / PySpark (pour exécution locale)
+# -------------------------------------------------------
+sys.modules["pyspark"] = types.ModuleType("pyspark")
+sys.modules["pyspark.context"] = types.ModuleType("pyspark.context")
+sys.modules["awsglue"] = types.ModuleType("awsglue")
+sys.modules["awsglue.context"] = types.ModuleType("awsglue.context")
+sys.modules["awsglue.utils"] = types.ModuleType("awsglue.utils")
 
-# Import des fonctions à tester après le mocking
-from glue_script import get_s3_config
 
-class TestGlueJob(unittest.TestCase):
+# -------------------------------------------------------
+# Import du job
+# -------------------------------------------------------
+from src.jobs.count_and_save_in_csv import run_job
 
-    @patch('boto3.client')
-    def test_get_s3_config(self, mock_boto_client):
-        """Vérifie que la lecture du JSON S3 fonctionne correctement."""
-        # Setup du mock S3
-        mock_s3 = MagicMock()
-        mock_boto_client.return_value = mock_s3
-        
-        mock_data = {"OUTPUT_BUCKET_NAME": "test-bucket"}
-        mock_body = MagicMock()
-        mock_body.read.return_value = json.dumps(mock_data).encode('utf-8')
-        mock_s3.get_object.return_value = {"Body": mock_body}
 
-        # Appel de la fonction
-        config = get_s3_config(mock_s3, "s3://fake-bucket/config.json")
+# -------------------------------------------------------
+# TEST
+# -------------------------------------------------------
+@patch("src.jobs.count_and_save_in_csv.boto3.client")
+@patch("src.jobs.count_and_save_in_csv.getResolvedOptions")
+@patch("src.jobs.count_and_save_in_csv.SparkContext")
+@patch("src.jobs.count_and_save_in_csv.GlueContext")
+def test_run_job_success(
+    mock_glue,
+    mock_sc,
+    mock_args,
+    mock_boto
+):
 
-        # Assertions
-        self.assertEqual(config["OUTPUT_BUCKET_NAME"], "test-bucket")
-        mock_s3.get_object.assert_called_with(Bucket="fake-bucket", Key="config.json")
+    # -----------------------------
+    # Glue args
+    # -----------------------------
+    mock_args.return_value = {
+        "CONFIG_PATH": "s3://my-bucket/config.json"
+    }
 
-    @patch('glue_script.SparkContext')
-    @patch('glue_script.GlueContext')
-    @patch('glue_script.Job')
-    @patch('glue_script.getResolvedOptions')
-    @patch('glue_script.boto3.client')
-    def test_run_job_flow(self, mock_boto, mock_get_args, mock_job, mock_glue_ctx, mock_sc):
-        """Vérifie le flux complet du job (initialisation et appels)."""
-        
-        # 1. Mock des arguments
-        mock_get_args.return_value = {'JOB_NAME': 'test_job', 'CONFIG_PATH': 's3://b/c.json'}
-        
-        # 2. Mock de la config S3
-        mock_s3 = MagicMock()
-        mock_boto.return_value = mock_s3
-        mock_body = MagicMock()
-        mock_body.read.return_value = json.dumps({"OUTPUT_BUCKET_NAME": "out"}).encode('utf-8')
-        mock_s3.get_object.return_value = {"Body": mock_body}
+    # -----------------------------
+    # Mock S3
+    # -----------------------------
+    s3 = Mock()
+    mock_boto.return_value = s3
 
-        # 3. Mock Spark Session
-        mock_spark = mock_glue_ctx.return_value.spark_session
-        
-        # Import local pour éviter les effets de bord
-        from glue_script import run_job
-        
-        # Exécution
-        run_job()
+    s3.get_object.return_value = {
+        "Body": Mock(
+            read=Mock(
+                return_value=json.dumps({
+                    "OUTPUT_BUCKET_NAME": "output-bucket"
+                }).encode("utf-8")
+            )
+        )
+    }
 
-        # Vérifications
-        mock_job.return_value.init.assert_called()
-        mock_job.return_value.commit.assert_called()
-        mock_spark.createDataFrame.assert_called()
-        print("\n✅ Test du flux complet réussi.")
+    # -----------------------------
+    # Mock Spark DataFrame
+    # -----------------------------
+    df_mock = Mock()
+    writer_mock = Mock()
 
-if __name__ == '__main__':
-    unittest.main()
+    df_mock.coalesce.return_value = df_mock
+    df_mock.write = writer_mock
+
+    writer_mock.mode.return_value = writer_mock
+    writer_mock.option.return_value = writer_mock
+    writer_mock.csv.return_value = None
+
+    spark_mock = Mock()
+    spark_mock.createDataFrame.return_value = df_mock
+
+    mock_glue.return_value.spark_session = spark_mock
+    mock_sc.return_value = Mock()
+
+    # -----------------------------
+    # EXECUTION
+    # -----------------------------
+    run_job()
+
+    # -----------------------------
+    # ASSERTIONS
+    # -----------------------------
+    s3.get_object.assert_called_once()
+    spark_mock.createDataFrame.assert_called_once()
+    writer_mock.csv.assert_called_once()
+
+    args, _ = writer_mock.csv.call_args
+    assert "s3://output-bucket/output/" in args[0]
