@@ -3,8 +3,9 @@ import json
 import types
 from unittest.mock import Mock, patch
 
+
 # -------------------------------------------------------
-# Mock AWS Glue / PySpark (pour exécution locale)
+# MOCK modules AWS Glue / Spark
 # -------------------------------------------------------
 sys.modules["pyspark"] = types.ModuleType("pyspark")
 sys.modules["pyspark.context"] = types.ModuleType("pyspark.context")
@@ -14,7 +15,7 @@ sys.modules["awsglue.utils"] = types.ModuleType("awsglue.utils")
 
 
 # -------------------------------------------------------
-# Import du job
+# IMPORT JOB
 # -------------------------------------------------------
 from src.jobs.count_and_save_in_csv import run_job
 
@@ -23,20 +24,20 @@ from src.jobs.count_and_save_in_csv import run_job
 # TEST
 # -------------------------------------------------------
 @patch("src.jobs.count_and_save_in_csv.boto3.client")
-@patch("src.jobs.count_and_save_in_csv.getResolvedOptions")
-@patch("src.jobs.count_and_save_in_csv.SparkContext")
-@patch("src.jobs.count_and_save_in_csv.GlueContext")
+@patch("awsglue.utils.getResolvedOptions")
+@patch("pyspark.context.SparkContext")
+@patch("awsglue.context.GlueContext")
 def test_run_job_success(
-    mock_glue,
-    mock_sc,
-    mock_args,
+    mock_glue_context,
+    mock_spark_context,
+    mock_get_args,
     mock_boto
 ):
 
     # -----------------------------
     # Glue args
     # -----------------------------
-    mock_args.return_value = {
+    mock_get_args.return_value = {
         "CONFIG_PATH": "s3://my-bucket/config.json"
     }
 
@@ -57,7 +58,7 @@ def test_run_job_success(
     }
 
     # -----------------------------
-    # Mock Spark DataFrame
+    # Mock Spark DF
     # -----------------------------
     df_mock = Mock()
     writer_mock = Mock()
@@ -72,11 +73,11 @@ def test_run_job_success(
     spark_mock = Mock()
     spark_mock.createDataFrame.return_value = df_mock
 
-    mock_glue.return_value.spark_session = spark_mock
-    mock_sc.return_value = Mock()
+    mock_glue_context.return_value.spark_session = spark_mock
+    mock_spark_context.return_value = Mock()
 
     # -----------------------------
-    # EXECUTION
+    # RUN
     # -----------------------------
     run_job()
 
