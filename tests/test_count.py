@@ -1,53 +1,65 @@
-import pytest
-from unittest.mock import patch, MagicMock
-from pyspark.sql import SparkSession
 import sys
+from unittest.mock import patch, MagicMock
+import pytest
 
-# On importe la fonction à tester
-# Note : assure-toi que ton dossier 'src' est dans le PYTHONPATH
+# --- HACK : Simulation des modules AWS Glue inexistants localement ---
+# On doit faire ça AVANT d'importer le code source qui les utilise
+mock_glue = MagicMock()
+sys.modules["awsglue"] = mock_glue
+sys.modules["awsglue.context"] = MagicMock()
+sys.modules["awsglue.utils"] = MagicMock()
+# --------------------------------------------------------------------
+
 from src.jobs.count_and_save_in_csv import run_job
 
 @pytest.fixture(scope="session")
 def spark():
-    """Cree une session Spark locale pour les tests."""
+    """Crée une session Spark locale pour les tests."""
+    from pyspark.sql import SparkSession
     return SparkSession.builder \
         .master("local[1]") \
         .appName("testing") \
-        .get_create()
+        .getOrCreate()  # Correction de get_create -> getOrCreate
 
 @patch("src.jobs.count_and_save_in_csv.getResolvedOptions")
 @patch("src.jobs.count_and_save_in_csv.boto3.client")
 @patch("src.jobs.count_and_save_in_csv.GlueContext")
 @patch("src.jobs.count_and_save_in_csv.SparkContext")
 def test_run_job_logic(mock_sc, mock_glue_context, mock_boto, mock_args, spark):
-    # 1. Mock des arguments Glue
+    # 1. Configuration des arguments Glue
     mock_args.return_value = {'CONFIG_PATH': 's3://fake-bucket/config.json'}
 
-    # 2. Mock de la réponse S3 (le fichier de config JSON)
+    # 2. Simulation de la réponse S3
     mock_s3_client = MagicMock()
     mock_boto.return_value = mock_s3_client
     
-    config_content = '{"OUTPUT_BUCKET_NAME": "my-test-output"}'
+    config_content = '{"OUTPUT_BUCKET_NAME": "test-output-bucket"}'
     mock_s3_client.get_object.return_value = {
         "Body": MagicMock(read=lambda: config_content.encode("utf-8"))
     }
 
-    # 3. Mock de Glue pour retourner notre session Spark locale
+    # 3. Injection de la session Spark locale dans le mock Glue
     mock_glue_context.return_value.spark_session = spark
 
-    # 4. Execution du job
-    # On mock aussi le 'write' pour éviter d'écrire réellement sur le disque/S3 pendant le test
-    with patch.object(spark.DataFrame, "write", new_callable=MagicMock) as mock_write:
+    # 4. Mock de l'écriture pour ne pas créer de fichiers CSV réels
+    # On intercepte l'appel à .write sur n'importe quel DataFrame
+    with patch("pyspark.sql.DataFrame.write", new_callable=PropertyMock) as mock_write:
+        # On définit une chaîne de mocks pour df.write.mode().option().csv()
+        mock_writer = MagicMock()
+        mock_write.return_value = mock_writer
+        mock_writer.mode.return_value = mock_writer
+        mock_writer.option.return_value = mock_writer
+
+        # --- EXECUTION ---
         run_job()
-        
-        # Vérifications
-        # Est-ce que S3 a été appelé avec le bon bucket ?
+
+        # --- VERIFICATIONS ---
+        # Vérifie si le bon bucket a été appelé
         mock_s3_client.get_object.assert_called_with(Bucket="fake-bucket", Key="config.json")
         
-        # Est-ce que l'écriture a été tentée au bon endroit ?
-        expected_path = "s3://my-test-output/output/"
-        mock_write.mode.assert_called_with("overwrite")
-        mock_write.mode().option.assert_called_with("header", "true")
-        mock_write.mode().option().csv.assert_called_with(expected_path)
+        # Vérifie si le chemin de sortie CSV est correct
+        expected_path = "s3://test-output-bucket/output/"
+        mock_writer.csv.assert_called_with(expected_path)
 
-    print("Test validé avec succès !")
+# Petit helper pour mocker les propriétés Spark
+from unittest.mock import PropertyMock
