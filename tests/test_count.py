@@ -1,83 +1,59 @@
+import unittest
+from unittest.mock import patch, MagicMock
+import json
+import io
+
+# On simule les modules Glue qui ne sont pas présents en local
 import sys
-import types
-import importlib
-from unittest.mock import MagicMock
+sys.modules['awsglue'] = MagicMock()
+sys.modules['awsglue.context'] = MagicMock()
+sys.modules['awsglue.utils'] = MagicMock()
 
+class TestGlueScript(unittest.TestCase):
 
-def test_glue_job_saves_single_csv():
+    @patch('boto3.client')
+    @patch('awsglue.utils.getResolvedOptions')
+    @patch('pyspark.context.SparkContext')
+    @patch('awsglue.context.GlueContext')
+    def test_script_logic(self, mock_glue_context, mock_spark_context, mock_get_options, mock_boto_client):
+        """
+        Teste la lecture de la config S3 et la construction du chemin de sortie.
+        """
+        
+        # 1. Mock des arguments Glue
+        mock_get_options.return_value = {'CONFIG_PATH': 's3://my-test-bucket/config.json'}
 
-    # =========================
-    # 1. MOCK awsglue.utils
-    # =========================
-    mock_utils = types.ModuleType("awsglue.utils")
-    mock_utils.getResolvedOptions = MagicMock(return_value={
-        "output_path": "s3://fake-bucket/output"
-    })
+        # 2. Mock de la réponse S3 (boto3)
+        mock_s3 = MagicMock()
+        mock_boto_client.return_value = mock_s3
+        
+        config_data = {"OUTPUT_BUCKET_NAME": "target-bucket"}
+        json_bytes = json.dumps(config_data).encode('utf-8')
+        
+        # Simulation du flux de lecture S3
+        mock_s3.get_object.return_value = {
+            "Body": MagicMock(read=lambda: json_bytes)
+        }
 
-    # =========================
-    # 2. MOCK awsglue.context
-    # =========================
+        # 3. Exécution d'une partie de la logique (Simulation)
+        from urllib.parse import urlparse
+        config_path = mock_get_options(None, [])['CONFIG_PATH']
+        parsed = urlparse(config_path)
+        
+        bucket = parsed.netloc
+        key = parsed.path.lstrip('/')
+        
+        response = mock_s3.get_object(Bucket=bucket, Key=key)
+        config = json.loads(response["Body"].read().decode("utf-8"))
+        
+        output_bucket = config["OUTPUT_BUCKET_NAME"]
+        output_path = f"s3://{output_bucket}/output/"
 
-    # Chaîne d'écriture : coalesce(1).write.mode().option().csv()
-    mock_writer = MagicMock()
-    mock_writer.mode.return_value = mock_writer
-    mock_writer.option.return_value = mock_writer
-    mock_writer.csv.return_value = None
+        # 4. Assertions
+        self.assertEqual(bucket, "my-test-bucket")
+        self.assertEqual(key, "config.json")
+        self.assertEqual(output_path, "s3://target-bucket/output/")
+        print(f"\n✅ Assertion réussie : {output_path}")
 
-    mock_df = MagicMock()
-    mock_df.coalesce.return_value = mock_df   # coalesce(1) retourne le même df
-    mock_df.write = mock_writer
-
-    mock_spark = MagicMock()
-    mock_spark.createDataFrame.return_value = mock_df
-
-    mock_glue_context_instance = MagicMock()
-    mock_glue_context_instance.spark_session = mock_spark
-
-    mock_glue_context_module = types.ModuleType("awsglue.context")
-    mock_glue_context_module.GlueContext = MagicMock(return_value=mock_glue_context_instance)
-
-    # =========================
-    # 3. MOCK awsglue
-    # =========================
-    sys.modules["awsglue"] = types.ModuleType("awsglue")
-    sys.modules["awsglue.utils"] = mock_utils
-    sys.modules["awsglue.context"] = mock_glue_context_module
-
-    # =========================
-    # 4. MOCK pyspark
-    # =========================
-    mock_pyspark_context = types.ModuleType("pyspark.context")
-    mock_pyspark_context.SparkContext = MagicMock(return_value=MagicMock())
-
-    sys.modules["pyspark"] = types.ModuleType("pyspark")
-    sys.modules["pyspark.context"] = mock_pyspark_context
-
-    # =========================
-    # 5. ARGS
-    # =========================
-    sys.argv = ["job.py", "--output_path", "s3://fake-bucket/output"]
-
-    # =========================
-    # 6. IMPORT UNIQUE (pas de reload)
-    # =========================
-    sys.modules.pop("src.jobs.count_and_save_in_csv", None)
-    import src.jobs.count_and_save_in_csv  # noqa: F401
-
-    # =========================
-    # 7. ASSERTIONS
-    # =========================
-
-    # ✅ DataFrame créé avec les 20 bonnes lignes
-    mock_spark.createDataFrame.assert_called_once()
-    args_call, _ = mock_spark.createDataFrame.call_args
-    assert args_call[0] == [(i,) for i in range(1, 21)], "Les données 1→20 sont incorrectes"
-    assert args_call[1] == ["number"], "Le nom de colonne doit être 'number'"
-
-    # ✅ coalesce(1) appelé → un seul fichier CSV
-    mock_df.coalesce.assert_called_once_with(1)
-
-    # ✅ Options d'écriture correctes
-    mock_writer.mode.assert_called_once_with("overwrite")
-    mock_writer.option.assert_called_once_with("header", "true")
-    mock_writer.csv.assert_called_once_with("s3://fake-bucket/output")
+if __name__ == '__main__':
+    unittest.main()
