@@ -4,9 +4,9 @@ import types
 from unittest.mock import Mock, patch
 
 
-# -------------------------------------------------------
-# MOCK modules (juste pour éviter import error)
-# -------------------------------------------------------
+# -----------------------------
+# Fake modules (important)
+# -----------------------------
 sys.modules["pyspark"] = types.ModuleType("pyspark")
 sys.modules["pyspark.context"] = types.ModuleType("pyspark.context")
 sys.modules["awsglue"] = types.ModuleType("awsglue")
@@ -14,21 +14,18 @@ sys.modules["awsglue.context"] = types.ModuleType("awsglue.context")
 sys.modules["awsglue.utils"] = types.ModuleType("awsglue.utils")
 
 
-# -------------------------------------------------------
-# IMPORT JOB
-# -------------------------------------------------------
 from src.jobs.count_and_save_in_csv import run_job
 
 
-# -------------------------------------------------------
-# TEST
-# -------------------------------------------------------
+# -----------------------------
+# PATCH IMPORTANT (CORRECT)
+# -----------------------------
 @patch("src.jobs.count_and_save_in_csv.boto3.client")
-@patch("src.jobs.count_and_save_in_csv.getResolvedOptions")
-@patch("src.jobs.count_and_save_in_csv.SparkContext")
-@patch("src.jobs.count_and_save_in_csv.GlueContext")   # ✅ ICI (important)
+@patch("awsglue.utils.getResolvedOptions")
+@patch("pyspark.context.SparkContext")
+@patch("awsglue.context.GlueContext")   # 👈 OK ici MAIS ON VA MOCK LA CLASSE
 def test_run_job_success(
-    mock_glue,
+    mock_glue_class,
     mock_spark,
     mock_args,
     mock_boto
@@ -73,7 +70,11 @@ def test_run_job_success(
     spark_mock = Mock()
     spark_mock.createDataFrame.return_value = df_mock
 
-    mock_glue.return_value.spark_session = spark_mock
+    # ⚠️ GlueContext instance mock
+    glue_instance = Mock()
+    glue_instance.spark_session = spark_mock
+
+    mock_glue_class.return_value = glue_instance
     mock_spark.return_value = Mock()
 
     # -----------------------------
