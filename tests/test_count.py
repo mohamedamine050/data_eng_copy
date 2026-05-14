@@ -1,56 +1,73 @@
-import sys
-import types
-from unittest.mock import Mock, patch
 import json
+from unittest.mock import Mock, patch
 
-
-# -----------------------------
-# FAKE awsglue MODULE (IMPORTANT)
-# -----------------------------
-mock_awsglue = types.ModuleType("awsglue")
-mock_context = types.ModuleType("awsglue.context")
-mock_utils = types.ModuleType("awsglue.utils")
-
-mock_context.GlueContext = Mock()
-mock_utils.getResolvedOptions = Mock()
-
-mock_awsglue.context = mock_context
-mock_awsglue.utils = mock_utils
-
-sys.modules["awsglue"] = mock_awsglue
-sys.modules["awsglue.context"] = mock_context
-sys.modules["awsglue.utils"] = mock_utils
-
-
-# -----------------------------
-# IMPORT AFTER MOCK
-# -----------------------------
 from src.jobs.count_and_save_in_csv import run_job
 
 
-# -----------------------------
-# TEST
-# -----------------------------
-@patch("src.jobs.count_and_save_in_csv.boto3.client")
-def test_run_job_success(mock_boto):
+@patch("boto3.client")  # ✅ FIX ICI
+@patch("awsglue.utils.getResolvedOptions")
+@patch("pyspark.context.SparkContext")
+@patch("awsglue.context.GlueContext")
+def test_run_job_success(
+    mock_glue,
+    mock_spark,
+    mock_args,
+    mock_boto
+):
 
-    # fake args
-    mock_utils.getResolvedOptions.return_value = {
+    # -------------------------
+    # Glue args
+    # -------------------------
+    mock_args.return_value = {
         "CONFIG_PATH": "s3://my-bucket/config.json"
     }
 
-    # fake s3
+    # -------------------------
+    # S3 mock
+    # -------------------------
     s3 = Mock()
     mock_boto.return_value = s3
 
     s3.get_object.return_value = {
-        "Body": Mock(read=Mock(return_value=json.dumps({
-            "OUTPUT_BUCKET_NAME": "output-bucket"
-        }).encode()))
+        "Body": Mock(
+            read=Mock(
+                return_value=json.dumps({
+                    "OUTPUT_BUCKET_NAME": "output-bucket"
+                }).encode()
+            )
+        )
     }
 
-    # run job
+    # -------------------------
+    # Spark mock
+    # -------------------------
+    df = Mock()
+    writer = Mock()
+
+    df.coalesce.return_value = df
+    df.write = writer
+
+    writer.mode.return_value = writer
+    writer.option.return_value = writer
+    writer.csv.return_value = None
+
+    spark = Mock()
+    spark.createDataFrame.return_value = df
+
+    glue = Mock()
+    glue.spark_session = spark
+
+    mock_glue.return_value = glue
+    mock_spark.return_value = Mock()
+
+    # -------------------------
+    # RUN
+    # -------------------------
     run_job()
 
-    # assert S3 called
+    # -------------------------
+    # ASSERT
+    # -------------------------
     s3.get_object.assert_called_once()
+    spark.createDataFrame.assert_called_once()
+    writer.csv.assert_called_once()
