@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 
 
 # -------------------------------------------------------
-# MOCK modules AWS Glue / Spark
+# MOCK modules (juste pour éviter import error)
 # -------------------------------------------------------
 sys.modules["pyspark"] = types.ModuleType("pyspark")
 sys.modules["pyspark.context"] = types.ModuleType("pyspark.context")
@@ -24,25 +24,25 @@ from src.jobs.count_and_save_in_csv import run_job
 # TEST
 # -------------------------------------------------------
 @patch("src.jobs.count_and_save_in_csv.boto3.client")
-@patch("awsglue.utils.getResolvedOptions")
-@patch("pyspark.context.SparkContext")
-@patch("awsglue.context.GlueContext")
+@patch("src.jobs.count_and_save_in_csv.getResolvedOptions")
+@patch("src.jobs.count_and_save_in_csv.SparkContext")
+@patch("src.jobs.count_and_save_in_csv.GlueContext")   # ✅ ICI (important)
 def test_run_job_success(
-    mock_glue_context,
-    mock_spark_context,
-    mock_get_args,
+    mock_glue,
+    mock_spark,
+    mock_args,
     mock_boto
 ):
 
     # -----------------------------
-    # Glue args
+    # Args Glue
     # -----------------------------
-    mock_get_args.return_value = {
+    mock_args.return_value = {
         "CONFIG_PATH": "s3://my-bucket/config.json"
     }
 
     # -----------------------------
-    # Mock S3
+    # S3 mock
     # -----------------------------
     s3 = Mock()
     mock_boto.return_value = s3
@@ -58,7 +58,7 @@ def test_run_job_success(
     }
 
     # -----------------------------
-    # Mock Spark DF
+    # Spark mock
     # -----------------------------
     df_mock = Mock()
     writer_mock = Mock()
@@ -73,8 +73,8 @@ def test_run_job_success(
     spark_mock = Mock()
     spark_mock.createDataFrame.return_value = df_mock
 
-    mock_glue_context.return_value.spark_session = spark_mock
-    mock_spark_context.return_value = Mock()
+    mock_glue.return_value.spark_session = spark_mock
+    mock_spark.return_value = Mock()
 
     # -----------------------------
     # RUN
