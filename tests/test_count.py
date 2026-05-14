@@ -3,8 +3,9 @@ import json
 import types
 from unittest.mock import Mock, patch
 
+
 # ---------------------------------------------------
-# FAKE AWS MODULES (IMPORTANT)
+# FAKE AWS MODULES (NO IMPORTS)
 # ---------------------------------------------------
 sys.modules["awsglue"] = types.ModuleType("awsglue")
 sys.modules["awsglue.context"] = types.ModuleType("awsglue.context")
@@ -14,13 +15,12 @@ sys.modules["pyspark"] = types.ModuleType("pyspark")
 sys.modules["pyspark.context"] = types.ModuleType("pyspark.context")
 
 
-# 👉 IMPORTANT: inject GlueContext inside fake module
-from awsglue.context import GlueContext
-awsglue.context.GlueContext = Mock
+# IMPORTANT: define GlueContext inside fake module
+sys.modules["awsglue.context"].GlueContext = Mock
 
 
 # ---------------------------------------------------
-# IMPORT AFTER MOCKING (CRITICAL)
+# IMPORT JOB (AFTER MOCKS)
 # ---------------------------------------------------
 from src.jobs.count_and_save_in_csv import run_job
 
@@ -34,7 +34,7 @@ from src.jobs.count_and_save_in_csv import run_job
 def test_run_job_success(mock_spark, mock_args, mock_boto):
 
     # -----------------------------
-    # Args
+    # args
     # -----------------------------
     mock_args.return_value = {
         "CONFIG_PATH": "s3://my-bucket/config.json"
@@ -75,8 +75,9 @@ def test_run_job_success(mock_spark, mock_args, mock_boto):
     glue_instance = Mock()
     glue_instance.spark_session = spark
 
-    # patch GlueContext constructor result
-    awsglue.context.GlueContext.return_value = glue_instance
+    # GlueContext constructor mock
+    sys.modules["awsglue.context"].GlueContext.return_value = glue_instance
+
     mock_spark.return_value = Mock()
 
     # -----------------------------
