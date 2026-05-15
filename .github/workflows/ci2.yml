@@ -61,7 +61,7 @@ jobs:
             echo '=== Verifying paths in coverage.xml ===' 
             if grep -q '/home/runner/work' coverage.xml; then
               echo '⚠ WARNING: Still contains absolute paths, fixing...'
-              sed -i 's|/home/runner/work/data_eng/data_eng_copy/||g' coverage.xml
+              sed -i 's|/home/runner/work/data_eng_copy/data_eng_copy/||g' coverage.xml
             fi
             echo '=== Coverage file (first 10 lines) ===' 
             head -10 coverage.xml
