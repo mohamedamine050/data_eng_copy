@@ -1,67 +1,36 @@
-import sys
-from unittest.mock import patch, MagicMock
 import pytest
-
-# --- Simulation des modules AWS Glue ---
-mock_glue = MagicMock()
-sys.modules["awsglue"] = mock_glue
-sys.modules["awsglue.context"] = MagicMock()
-sys.modules["awsglue.utils"] = MagicMock()
-
-from src.jobs.count_and_save_in_csv import run_job
+from your_script import process_data, COUNTRIES_SCHEMA
+from pyspark.sql import SparkSession
 
 @pytest.fixture(scope="session")
 def spark():
-    """Crée une session Spark locale pour les tests."""
-    from pyspark.sql import SparkSession
-    return SparkSession.builder \
-        .master("local[1]") \
-        .appName("testing") \
-        .getOrCreate()
+    return SparkSession.builder.master("local[1]").appName("Tests").getOrCreate()
 
-@patch("awsglue.utils.getResolvedOptions")
-@patch("boto3.client")
-@patch("awsglue.context.GlueContext")
-@patch("pyspark.context.SparkContext")
-def test_run_job_logic(mock_sc, mock_glue_context, mock_boto, mock_args, spark):
-    # 1. Mock des arguments Glue
-    mock_args.return_value = {'CONFIG_PATH': 's3://fake-bucket/config.json'}
-
-     # 1. Mock des arguments Glue # 1. Mock des arguments Glue # 1. Mock des arguments Glue # 1. Mock des arguments Glue
-    # 1. Mock des arguments Glue
-    # 1. Mock des arguments Glue
-
-    # 2. Mock de S3 (lecture config)
-    mock_s3_client = MagicMock()
-    mock_boto.return_value = mock_s3_client
-    config_content = '{"OUTPUT_BUCKET_NAME": "test-output-bucket"}'
-    mock_s3_client.get_object.return_value = {
-        "Body": MagicMock(read=lambda: config_content.encode("utf-8"))
-    }
-
-    # 3. Injection de la session Spark
-    mock_glue_context.return_value.spark_session = spark
-
-    # 4. Mocker la création du DataFrame pour intercepter l'écriture
-    # On patche 'createDataFrame' pour qu'il renvoie un objet Mock au lieu d'un vrai DF
-    mock_df = MagicMock()
+def test_process_data_filtering(spark):
+    # GIVEN: Un jeu de données avec un pays invalide (population <= 0)
+    data = [
+        {"name": "France", "region": "Europe", "population": 67000000, "area_km2": 550000.0, "capital": "Paris", "independent": True},
+        {"name": "Ghost Island", "region": "Oceania", "population": 0, "area_km2": 10.0, "capital": None, "independent": False}
+    ]
     
-    # On s'assure que df.coalesce(1) renvoie aussi le mock
-    mock_df.coalesce.return_value = mock_df
+    # WHEN: On applique la transformation
+    df_detail, df_summary = process_data(spark, data)
     
-    # On simule la chaîne d'écriture : df.write.mode().option().csv()
-    mock_writer = mock_df.write.mode.return_value.option.return_value
+    # THEN: Il ne reste qu'un seul pays
+    assert df_detail.count() == 1
+    assert df_detail.collect()[0]["name"] == "France"
 
-    with patch.object(spark, "createDataFrame", return_value=mock_df):
-        # --- EXÉCUTION ---
-        run_job()
-
-        # --- VÉRIFICATIONS ---
-        # Vérifie que la config S3 a été lue
-        mock_s3_client.get_object.assert_called_with(Bucket="fake-bucket", Key="config.json")
-        
-        # Vérifie que le CSV a été "écrit" (via le mock) au bon endroit
-        expected_path = "s3://test-output-bucket/output/"
-        mock_writer.csv.assert_called_with(expected_path)
-
-    print("Test réussi et écriture S3 neutralisée !")
+def test_aggregation_logic(spark):
+    # GIVEN: Deux pays dans la même région
+    data = [
+        {"name": "A", "region": "Test", "population": 100, "area_km2": 10.0, "capital": "X", "independent": True},
+        {"name": "B", "region": "Test", "population": 200, "area_km2": 20.0, "capital": "Y", "independent": True}
+    ]
+    
+    # WHEN
+    _, df_summary = process_data(spark, data)
+    res = df_summary.collect()[0]
+    
+    # THEN
+    assert res["nb_countries"] == 2
+    assert res["total_population"] == 300
