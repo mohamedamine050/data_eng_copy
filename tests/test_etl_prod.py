@@ -13,7 +13,7 @@ from moto import mock_aws
 # Note : Ajuste le nom de l'import si ton fichier ne s'appelle pas exactement 'first_etl'
 
 from src.jobs.etl_products import main
-from first_etl import (
+from src.jobs.etl_products import (
     _price_tier,
     _rating_label,
     fetch_products,
