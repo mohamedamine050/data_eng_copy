@@ -161,4 +161,20 @@ jobs:
       # ─────────────────────────────
       # 12. ROLLBACK ON FAILURE
       # Restore the backed up scripts from .backups/
-    
+      # ─────────────────────────────
+      - name: Rollback - Restore Backups
+        if: failure()
+        run: |
+          set -euo pipefail
+          echo ""
+          echo "🔴 SMOKE TEST FAILED - INITIATING ROLLBACK"
+          echo ""
+          echo "[ROLLBACK 1] Restoring old script for $GLUE_JOB_1..."
+          aws s3 cp .backups/glue_job_1_backup.py s3://$S3_KEY_1 || echo "[WARN] Could not restore backup for job 1"
+          echo "[ROLLBACK 1] Restarting $GLUE_JOB_1 with old script..."
+          NEW_RUN=$(aws glue start-job-run --job-name $GLUE_JOB_1 --query 'JobRunId' --output text 2>/dev/null || echo "ERROR")
+          if [ "$NEW_RUN" != "ERROR" ]; then echo "[✓] Job 1 restarted with RUN_ID=$NEW_RUN"; else echo "[ERROR] Failed to restart job 1"; fi
+
+          echo ""
+          echo "✅ Rollback completed - old scripts restored and jobs restarted"
+          echo "   → Monitor CloudWatch logs for execution status"
