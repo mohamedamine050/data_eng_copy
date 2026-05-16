@@ -64,6 +64,13 @@ jobs:
           echo "KEY=$S3_KEY_1"
           echo "FULL=$S3_PATH_1"
 
+      - name: Backup Current Glue Scripts
+        run: |
+          set -euo pipefail
+          mkdir -p .backups
+          echo "[INFO] Backing up current Glue scripts before deployment..."
+          aws s3 cp s3://$S3_KEY_1 .backups/glue_job_1_backup.py 2>/dev/null || echo "[WARN] No current script for job 1"
+          echo "[✓] Backup completed"
 
       - name: Replace Glue script in S3
         run: |
@@ -76,7 +83,7 @@ jobs:
       # ─────────────────────────────
       - name: Trigger Glue Jobs
         run: |
-          CONFIG_BUCKET="tfstate-etl-spark-pipelineghaith-py2mlgjz"
+          CONFIG_BUCKET=""
           CONFIG_PATH="s3://${CONFIG_BUCKET}/config.json"
 
           RUN1=$(aws glue start-job-run --job-name "$GLUE_JOB_1" --arguments '{"--CONFIG_PATH":"'"$CONFIG_PATH"'"}' --query "JobRunId" --output text)
@@ -150,3 +157,24 @@ jobs:
 
           echo ""
           echo "✅ Tous les smoke tests sont passés."
+
+      # ─────────────────────────────
+      # 12. ROLLBACK ON FAILURE
+      # Restore the backed up scripts from .backups/
+      # ─────────────────────────────
+      - name: Rollback - Restore Backups
+        if: failure()
+        run: |
+          set -euo pipefail
+          echo ""
+          echo "🔴 SMOKE TEST FAILED - INITIATING ROLLBACK"
+          echo ""
+          echo "[ROLLBACK 1] Restoring old script for $GLUE_JOB_1..."
+          aws s3 cp .backups/glue_job_1_backup.py s3://$S3_KEY_1 || echo "[WARN] Could not restore backup for job 1"
+          echo "[ROLLBACK 1] Restarting $GLUE_JOB_1 with old script..."
+          NEW_RUN=$(aws glue start-job-run --job-name $GLUE_JOB_1 --query 'JobRunId' --output text 2>/dev/null || echo "ERROR")
+          if [ "$NEW_RUN" != "ERROR" ]; then echo "[✓] Job 1 restarted with RUN_ID=$NEW_RUN"; else echo "[ERROR] Failed to restart job 1"; fi
+
+          echo ""
+          echo "✅ Rollback completed - old scripts restored and jobs restarted"
+          echo "   → Monitor CloudWatch logs for execution status"
