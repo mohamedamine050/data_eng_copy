@@ -1,5 +1,5 @@
 """
-first_etl.py — Product Catalog ETL
+etl_products.py — Product Catalog ETL
 ════════════════════════════════════
 Use case
 ────────
@@ -15,9 +15,7 @@ Config JSON stored in S3  (loaded via --CONFIG_PATH arg):
 ──────────────────────────────────────────────────────────
 {
   "API_URL":            "https://fakestoreapi.com/products",
-  "API_HEADERS":        { "Accept": "application/json" },
-  "API_PARAMS":         { "limit": 20 },
-  "OUTPUT_BUCKET_NAME": "ecommerce-data-lake",
+ 
   "OUTPUT_PREFIX":      "products/processed",
   "OUTPUT_FILE_NAME":   "catalog.csv"
 }
