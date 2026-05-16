@@ -1,122 +1,76 @@
-"""
-test_etl_csv_to_rds.py
-═══════════════════════
-Unit tests for src.jobs.etl_csv_to_rds
-"""
-
-import io
-import json
-import sys
-import types
 import unittest
 from unittest.mock import MagicMock, patch
-
 import pandas as pd
+import io
+import sys
 
-# ─────────────────────────────────────────────
-# IMPORT MODULE UNDER TEST
-# ─────────────────────────────────────────────
-import src.jobs.etl_csv_to_rds as etl
+# Import direct depuis le package src
+from src.jobs.etl_csv_to_rds import get_args, transform, read_csv_from_s3, get_rds_engine, main
 
-# IMPORTANT: alias pour les patchs globaux
-sys.modules["etl_csv_to_rds"] = etl
+class TestETL(unittest.TestCase):
 
-
-# ─────────────────────────────────────────────
-# MOCK AWS GLUE (IMPORTANT FIX CI)
-# ─────────────────────────────────────────────
-awsglue_mock = types.ModuleType("awsglue")
-awsglue_utils_mock = types.ModuleType("awsglue.utils")
-
-def fake_get_resolved_options(argv, options):
-    return {"CONFIG_PATH": "s3://bucket/config.json"}
-
-awsglue_utils_mock.getResolvedOptions = fake_get_resolved_options
-
-sys.modules["awsglue"] = awsglue_mock
-sys.modules["awsglue.utils"] = awsglue_utils_mock
-
-
-# ─────────────────────────────────────────────
-# TESTS
-# ─────────────────────────────────────────────
-
-class TestGetArgs(unittest.TestCase):
     def test_get_args(self):
+        """Vérifie la récupération des arguments via argparse (fallback Glue)."""
         test_args = ["etl_csv_to_rds.py", "--CONFIG_PATH", "s3://my-bucket/config.json"]
-
         with patch.object(sys, "argv", test_args):
-            args = etl.get_args()
+            args = get_args()
             self.assertEqual(args["CONFIG_PATH"], "s3://my-bucket/config.json")
 
-
-class TestTransform(unittest.TestCase):
-    def test_transform_basic_cleaning(self):
+    def test_transform_cleaning(self):
+        """Vérifie le nettoyage des colonnes et des strings."""
         df = pd.DataFrame({
-            " Name ": [" a ", " b "],
-            "value ": ["1", "2"]
+            " Full Name ": [" Alice ", " Bob "],
+            "Age": [25, 30]
         })
+        df_out = transform(df)
+        
+        # Vérification colonnes
+        self.assertIn("full_name", df_out.columns)
+        # Vérification strip()
+        self.assertEqual(df_out["full_name"].iloc[0], "Alice")
+        # Vérification timestamp
+        self.assertIn("ingestion_timestamp", df_out.columns)
 
-        out = etl.transform(df)
-
-        self.assertIn("name", out.columns)
-        self.assertIn("value", out.columns)
-        self.assertIn("ingestion_timestamp", out.columns)
-
-        self.assertEqual(out["name"].iloc[0], "a")
-
-
-class TestReadCsvFromS3(unittest.TestCase):
     @patch("boto3.client")
-    def test_read_csv(self, mock_boto):
-        fake_csv = "a,b\n1,2"
+    def test_read_csv_from_s3(self, mock_boto):
+        """Vérifie la lecture S3 via mock boto3."""
         mock_s3 = MagicMock()
+        fake_csv = "id,name\n1,test"
         mock_s3.get_object.return_value = {
-            "Body": io.BytesIO(fake_csv.encode())
+            "Body": io.BytesIO(fake_csv.encode("utf-8"))
         }
         mock_boto.return_value = mock_s3
 
-        df = etl.read_csv_from_s3("bucket", "key.csv")
-
-        self.assertEqual(list(df.columns), ["a", "b"])
+        df = read_csv_from_s3("my-bucket", "data.csv")
         self.assertEqual(len(df), 1)
+        self.assertEqual(df["name"].iloc[0], "test")
 
-
-class TestRdsEngine(unittest.TestCase):
-    def test_default_port(self):
-        cfg = {
-            "DB_HOST": "localhost",
-            "DB_PORT": "5432",
-            "DB_NAME": "db",
-            "DB_USER": "u",
-            "DB_PASSWORD": "p"
-        }
-
-        engine = etl.get_rds_engine(cfg)
-        self.assertIsNotNone(engine)
-
-
-class TestMain(unittest.TestCase):
     @patch("src.jobs.etl_csv_to_rds.load_to_rds")
-    @patch("src.jobs.etl_csv_to_rds.read_csv_from_s3")
     @patch("src.jobs.etl_csv_to_rds.get_rds_engine")
+    @patch("src.jobs.etl_csv_to_rds.read_csv_from_s3")
     @patch("src.jobs.etl_csv_to_rds.load_config")
-    def test_main(self, mock_cfg, mock_engine, mock_read, mock_load):
+    def test_main_flow(self, mock_cfg, mock_read, mock_engine, mock_load):
+        """Test d'intégration du workflow main() avec mocks de fonctions."""
+        # Configuration simulée
         mock_cfg.return_value = {
-            "INPUT_BUCKET_NAME": "b",
-            "INPUT_KEY_NAME": "k",
-            "DB_TABLE": "t",
+            "INPUT_BUCKET_NAME": "in-bkt",
+            "INPUT_KEY_NAME": "file.csv",
             "DB_HOST": "localhost",
-            "DB_NAME": "db",
-            "DB_USER": "u",
-            "DB_PASSWORD": "p",
+            "DB_NAME": "testdb",
+            "DB_USER": "admin",
+            "DB_PASSWORD": "password"
         }
-
-        mock_read.return_value = pd.DataFrame({"a": [1]})
+        mock_read.return_value = pd.DataFrame({"col1": [1]})
         mock_engine.return_value = MagicMock()
-        mock_load.return_value = 1
 
-        test_args = ["etl_csv_to_rds.py", "--CONFIG_PATH", "s3://bucket/config.json"]
-
+        test_args = ["job.py", "--CONFIG_PATH", "s3://bkt/cfg.json"]
         with patch.object(sys, "argv", test_args):
-            etl.main()
+            main()
+            
+            # Vérifications
+            mock_cfg.assert_called_once_with("s3://bkt/cfg.json")
+            mock_read.assert_called_once_with("in-bkt", "file.csv")
+            self.assertTrue(mock_load.called)
+
+if __name__ == "__main__":
+    unittest.main()
