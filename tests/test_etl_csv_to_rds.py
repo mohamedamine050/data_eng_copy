@@ -5,8 +5,11 @@ import io
 import sys
 import json
 
-# Fix the imports - use the correct module path
-from src.jobs.etl_csv_to_rds import get_args, transform, read_csv_from_s3, main, load_config, get_rds_engine
+# Fix: Import from the correct module path
+from src.jobs.etl_csv_to_rds import (
+    get_args, transform, read_csv_from_s3, main, 
+    load_config, get_rds_engine, load_to_rds
+)
 
 class TestETL(unittest.TestCase):
 
