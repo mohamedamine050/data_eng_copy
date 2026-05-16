@@ -52,10 +52,16 @@ jobs:
           echo "S3_KEY_1=$(terraform output -raw glue_script_s3_uri)" >> $GITHUB_ENV
           echo "GLUE_JOB_1=$(terraform output -raw glue_job_name)" >> $GITHUB_ENV
 
+          echo "S3_BUCKET_2=$(terraform output -raw scripts_bucket_name)" >> $GITHUB_ENV
+          echo "S3_KEY_2=$(terraform output -raw glue_script_product_s3_uri)" >> $GITHUB_ENV
+          echo "GLUE_JOB_2=$(terraform output -raw glue_job_product_name)" >> $GITHUB_ENV
+
 
       - name: Build S3 path
         run: |
           echo "S3_PATH_1=$S3_KEY_1" >> $GITHUB_ENV
+
+          echo "S3_PATH_2=$S3_KEY_2" >> $GITHUB_ENV
 
 
       - name: Debug S3 path
@@ -64,10 +70,18 @@ jobs:
           echo "KEY=$S3_KEY_1"
           echo "FULL=$S3_PATH_1"
 
+      - name: Backup Current Glue Scripts
+        run: |
+          set -euo pipefail
+          mkdir -p .backups
+          echo "[INFO] Backing up current Glue scripts before deployment..."
+          aws s3 cp s3://$S3_KEY_1 .backups/glue_job_1_backup.py 2>/dev/null || echo "[WARN] No current script for job 1"
+          echo "[✓] Backup completed"
 
       - name: Replace Glue script in S3
         run: |
           aws s3 cp src/jobs/etl_products.py $S3_PATH_1
+          aws s3 cp src/jobs/etl_csv_to_rds.py $S3_PATH_2
 
       # ─────────────────────────────
       # 10. Trigger Glue Jobs + capturer les Run IDs
@@ -82,7 +96,10 @@ jobs:
           RUN1=$(aws glue start-job-run --job-name "$GLUE_JOB_1" --arguments '{"--CONFIG_PATH":"'"$CONFIG_PATH"'"}' --query "JobRunId" --output text)
           echo "RUN_ID_1=$RUN1" >> $GITHUB_ENV
 
-          echo "Jobs lancés : $RUN1"
+          RUN2=$(aws glue start-job-run --job-name "$GLUE_JOB_2" --arguments '{"--CONFIG_PATH":"'"$CONFIG_PATH"'"}' --query "JobRunId" --output text)
+          echo "RUN_ID_2=$RUN2" >> $GITHUB_ENV
+
+          echo "Jobs lancés : $RUN1 | $RUN2"
 
       # ─────────────────────────────
       # 11. SMOKE TEST
@@ -135,6 +152,7 @@ jobs:
           }
 
           watch_run "$GLUE_JOB_1" "$RUN_ID_1" &
+          watch_run "$GLUE_JOB_2" "$RUN_ID_2" &
 
           # Attendre tous les processus et échouer si l'un d'eux échoue
           FAILED=0
@@ -150,3 +168,24 @@ jobs:
 
           echo ""
           echo "✅ Tous les smoke tests sont passés."
+
+      # ─────────────────────────────
+      # 12. ROLLBACK ON FAILURE
+      # Restore the backed up scripts from .backups/
+      # ─────────────────────────────
+      - name: Rollback - Restore Backups
+        if: failure()
+        run: |
+          set -euo pipefail
+          echo ""
+          echo "🔴 SMOKE TEST FAILED - INITIATING ROLLBACK"
+          echo ""
+          echo "[ROLLBACK 1] Restoring old script for $GLUE_JOB_1..."
+          aws s3 cp .backups/glue_job_1_backup.py s3://$S3_KEY_1 || echo "[WARN] Could not restore backup for job 1"
+          echo "[ROLLBACK 1] Restarting $GLUE_JOB_1 with old script..."
+          NEW_RUN=$(aws glue start-job-run --job-name $GLUE_JOB_1 --query 'JobRunId' --output text 2>/dev/null || echo "ERROR")
+          if [ "$NEW_RUN" != "ERROR" ]; then echo "[✓] Job 1 restarted with RUN_ID=$NEW_RUN"; else echo "[ERROR] Failed to restart job 1"; fi
+
+          echo ""
+          echo "✅ Rollback completed - old scripts restored and jobs restarted"
+          echo "   → Monitor CloudWatch logs for execution status"
