@@ -20,9 +20,7 @@ Config JSON stored in S3  (loaded via --CONFIG_PATH arg):
   "OUTPUT_FILE_NAME":   "catalog.csv"
 }
 
-Glue invocation:
-  --CONFIG_PATH s3://ecommerce-config/glue/first_etl_config.json
-"""
+
 
 import io
 import json
