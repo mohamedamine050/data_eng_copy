@@ -64,6 +64,20 @@ jobs:
           echo "S3_PATH_2=$S3_KEY_2" >> $GITHUB_ENV
 
 
+      - name: Build dependencies
+        run: |
+          mkdir req
+          pip install -r requirements.txt -t python/
+
+      - name: Zip des libs
+        run: |
+          cd req
+          zip -r ../dependencies.zip .
+
+      - name: Upload dependencies to S3
+        run: |
+          aws s3 cp dependencies.zip s3://tfstate-etl-spark-pipelineghaith-py2mlgjz/dependencies.zip
+
       - name: Debug S3 path
         run: |
           echo "BUCKET=$S3_BUCKET_1"
@@ -76,6 +90,7 @@ jobs:
           mkdir -p .backups
           echo "[INFO] Backing up current Glue scripts before deployment..."
           aws s3 cp s3://$S3_KEY_1 .backups/glue_job_1_backup.py 2>/dev/null || echo "[WARN] No current script for job 1"
+          aws s3 cp s3://$S3_KEY_2 .backups/glue_job_2_backup.py 2>/dev/null || echo "[WARN] No current script for job 2"
           echo "[✓] Backup completed"
 
       - name: Replace Glue script in S3
@@ -92,11 +107,12 @@ jobs:
         run: |
           CONFIG_BUCKET="tfstate-etl-spark-pipelineghaith-py2mlgjz"
           CONFIG_PATH="s3://${CONFIG_BUCKET}/config.json"
+          DEPS_PATH="s3://${CONFIG_BUCKET}/dependencies.zip"
 
-          RUN1=$(aws glue start-job-run --job-name "$GLUE_JOB_1" --arguments '{"--CONFIG_PATH":"'"$CONFIG_PATH"'"}' --query "JobRunId" --output text)
+          RUN1=$(aws glue start-job-run --job-name "$GLUE_JOB_1" --arguments '{"--CONFIG_PATH":"'"$CONFIG_PATH"'","--extra-py-files":"'"$DEPS_PATH"'"}' --query "JobRunId" --output text)
           echo "RUN_ID_1=$RUN1" >> $GITHUB_ENV
 
-          RUN2=$(aws glue start-job-run --job-name "$GLUE_JOB_2" --arguments '{"--CONFIG_PATH":"'"$CONFIG_PATH"'"}' --query "JobRunId" --output text)
+          RUN2=$(aws glue start-job-run --job-name "$GLUE_JOB_2" --arguments '{"--CONFIG_PATH":"'"$CONFIG_PATH"'","--extra-py-files":"'"$DEPS_PATH"'"}' --query "JobRunId" --output text)
           echo "RUN_ID_2=$RUN2" >> $GITHUB_ENV
 
           echo "Jobs lancés : $RUN1 | $RUN2"
@@ -185,6 +201,12 @@ jobs:
           echo "[ROLLBACK 1] Restarting $GLUE_JOB_1 with old script..."
           NEW_RUN=$(aws glue start-job-run --job-name $GLUE_JOB_1 --query 'JobRunId' --output text 2>/dev/null || echo "ERROR")
           if [ "$NEW_RUN" != "ERROR" ]; then echo "[✓] Job 1 restarted with RUN_ID=$NEW_RUN"; else echo "[ERROR] Failed to restart job 1"; fi
+
+          echo "[ROLLBACK 2] Restoring old script for $GLUE_JOB_2..."
+          aws s3 cp .backups/glue_job_2_backup.py s3://$S3_KEY_2 || echo "[WARN] Could not restore backup for job 2"
+          echo "[ROLLBACK 2] Restarting $GLUE_JOB_2 with old script..."
+          NEW_RUN=$(aws glue start-job-run --job-name $GLUE_JOB_2 --query 'JobRunId' --output text 2>/dev/null || echo "ERROR")
+          if [ "$NEW_RUN" != "ERROR" ]; then echo "[✓] Job 2 restarted with RUN_ID=$NEW_RUN"; else echo "[ERROR] Failed to restart job 2"; fi
 
           echo ""
           echo "✅ Rollback completed - old scripts restored and jobs restarted"
