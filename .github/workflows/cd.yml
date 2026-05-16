@@ -66,8 +66,8 @@ jobs:
 
       - name: Build dependencies
         run: |
-          mkdir req
-          pip install -r requirements.txt -t python/
+          mkdir -p req
+          pip install -r requirements.txt -t req/
 
       - name: Zip des libs
         run: |
