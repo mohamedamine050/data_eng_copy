@@ -26,7 +26,7 @@ awsglue_utils_mock.getResolvedOptions = MagicMock(return_value={"CONFIG_PATH": "
 sys.modules.setdefault("awsglue", awsglue_mock)
 sys.modules.setdefault("awsglue.utils", awsglue_utils_mock)
 
-import etl_csv_to_rds as etl  # noqa: E402  (import après mock)
+from src.jobs import etl_csv_to_rds as etl  # noqa: E402  (import après mock)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
